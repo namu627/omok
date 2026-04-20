@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>오목 (렌주룰)</title>
+<title>오목</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -21,7 +21,7 @@ body{
   padding:2.8rem 3.2rem;
   background:rgba(30,16,8,0.92);border:1px solid #6b4318;border-radius:18px;
   box-shadow:0 0 50px rgba(180,120,40,0.2),0 8px 40px rgba(0,0,0,0.6);
-  max-width:440px;width:90%;
+  max-width:460px;width:90%;
 }
 .game-title{
   font-family:'Noto Serif KR',serif;font-size:3.2rem;font-weight:900;
@@ -44,6 +44,16 @@ body{
 .diff-btn.hard:hover{background:rgba(200,80,80,0.12);border-color:#cf8080;box-shadow:0 0 14px rgba(200,80,80,0.2);}
 .diff-btn.expert{color:#d070ff;border-color:#703090;}
 .diff-btn.expert:hover{background:rgba(160,60,220,0.12);border-color:#d070ff;box-shadow:0 0 14px rgba(180,60,240,0.25);}
+.diff-btn.god{
+  color:#ffd700;border-color:#8b6914;
+  text-shadow:0 0 8px rgba(255,215,0,0.6);
+  background:rgba(20,15,0,0.5);
+}
+.diff-btn.god:hover{
+  background:rgba(255,215,0,0.1);border-color:#ffd700;
+  box-shadow:0 0 22px rgba(255,215,0,0.45),0 0 6px rgba(255,215,0,0.2);
+  text-shadow:0 0 12px rgba(255,215,0,0.9);
+}
 .renju-note{
   font-size:.75rem;color:#6a4020;text-align:center;line-height:1.7;
   border:1px solid #3a2010;border-radius:8px;padding:.6rem .9rem;background:rgba(0,0,0,0.2);
@@ -65,8 +75,11 @@ body{
 .status-text{font-size:.88rem;font-weight:500;color:#e8cc90;}
 .header-right{display:flex;align-items:center;gap:.7rem;}
 .diff-badge{font-size:.73rem;padding:.18rem .6rem;border:1px solid #4a2e10;border-radius:20px;color:#8a6030;white-space:nowrap;}
+.diff-badge.god-badge{color:#c8a800;border-color:#6b5010;text-shadow:0 0 6px rgba(255,215,0,0.4);}
 .thinking-wrap{display:none;align-items:center;gap:.35rem;font-size:.78rem;color:#b08040;}
+.thinking-wrap.god-think{color:#c8a800;}
 .dots span{display:inline-block;width:5px;height:5px;border-radius:50%;background:#b08040;animation:blink 1.2s infinite;}
+.god-think .dots span{background:#c8a800;}
 .dots span:nth-child(2){animation-delay:.2s;}
 .dots span:nth-child(3){animation-delay:.4s;}
 @keyframes blink{0%,80%,100%{opacity:.25;}40%{opacity:1;}}
@@ -114,11 +127,12 @@ canvas#board{display:block;border-radius:6px;cursor:pointer;max-width:100%;}
     <button class="diff-btn medium" onclick="startGame('medium')">보통</button>
     <button class="diff-btn hard"   onclick="startGame('hard')">어려움</button>
     <button class="diff-btn expert" onclick="startGame('expert')">전문가</button>
+    <button class="diff-btn god"    onclick="startGame('god')">신 ✦</button>
   </div>
   <div class="renju-note">
     <strong>렌주룰 (흑 금수)</strong><br>
-    흑은 삼삼·사사·장목(6목↑) 금지<br>
-    ✕ 표시 위치에는 흑돌을 놓을 수 없습니다
+    흑은 삼삼·사사·장목(6목↑) 금지 &nbsp;|&nbsp; ✕ 표시 위치에 흑돌 불가<br>
+    <strong>신</strong> <br> 이기면 인정 <br> 난이도: 반복 심화 탐색 + 전치표 (최대 3초 계산)
   </div>
 </div>
 
@@ -130,7 +144,7 @@ canvas#board{display:block;border-radius:6px;cursor:pointer;max-width:100%;}
     </div>
     <div class="header-right">
       <div class="thinking-wrap" id="thinkWrap">
-        AI 생각 중
+        <span id="thinkLabel">AI 생각 중</span>
         <div class="dots"><span></span><span></span><span></span></div>
       </div>
       <div class="diff-badge" id="diffBadge">보통</div>
@@ -158,7 +172,7 @@ canvas#board{display:block;border-radius:6px;cursor:pointer;max-width:100%;}
 
 // ── CONSTANTS ──
 const N = 19;
-const CENTER = Math.floor(N / 2); // 9
+const CENTER = Math.floor(N / 2);
 const EMPTY=0, BLACK=1, WHITE=2;
 
 const S={
@@ -176,13 +190,15 @@ const CFG={
   medium:{depth:2, cands:15, noise:0},
   hard:  {depth:3, cands:20, noise:0},
   expert:{depth:4, cands:15, noise:0},
+  god:   {depth:0, cands:15, noise:0},  // handled by Web Worker
 };
-const DNAME={easy:'쉬움',medium:'보통',hard:'어려움',expert:'전문가'};
+const DNAME={easy:'쉬움',medium:'보통',hard:'어려움',expert:'전문가',god:'신'};
 
 // ── STATE ──
 let board, turn, aiCol, humCol, over, lastMove, winLine, diff, aiBusy;
-let forbiddenSet = new Set(); // encoded r*N+c, forbidden cells for black's turn
+let forbiddenSet = new Set();
 let flashMsg = '', flashTimer = null;
+let godWorker = null;
 
 // ── CANVAS ──
 let canvas, ctx, cs, mg;
@@ -208,585 +224,570 @@ function resize() {
   cs = Math.max(Math.floor(maxS / (N + 1)), 18);
   mg = cs;
   const sz = cs * (N - 1) + mg * 2;
-  canvas.width = sz;
-  canvas.height = sz;
+  canvas.width = sz; canvas.height = sz;
 }
 
 function render() {
   if (!ctx) return;
   const sz = canvas.width;
-
-  // Board background
   const bg = ctx.createLinearGradient(0, 0, sz, sz);
-  bg.addColorStop(0, '#EEC060');
-  bg.addColorStop(.5, '#DCA850');
-  bg.addColorStop(1, '#C89040');
+  bg.addColorStop(0,'#EEC060'); bg.addColorStop(.5,'#DCA850'); bg.addColorStop(1,'#C89040');
   ctx.fillStyle = bg;
   ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(0, 0, sz, sz, 6);
-  else ctx.rect(0, 0, sz, sz);
+  if (ctx.roundRect) ctx.roundRect(0,0,sz,sz,6); else ctx.rect(0,0,sz,sz);
   ctx.fill();
-
-  // Wood grain
-  ctx.save(); ctx.globalAlpha = .03;
-  for (let y = -sz; y < sz * 2; y += 9) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(sz, y + 18);
-    ctx.strokeStyle = '#5A3800'; ctx.lineWidth = 2; ctx.stroke();
-  }
+  ctx.save(); ctx.globalAlpha=.03;
+  for (let y=-sz;y<sz*2;y+=9){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(sz,y+18);ctx.strokeStyle='#5A3800';ctx.lineWidth=2;ctx.stroke();}
   ctx.restore();
-
-  // Grid lines
-  ctx.strokeStyle = '#8B5A00'; ctx.lineWidth = .8;
-  for (let i = 0; i < N; i++) {
-    ctx.beginPath(); ctx.moveTo(cx(i), cy(0)); ctx.lineTo(cx(i), cy(N-1)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx(0), cy(i)); ctx.lineTo(cx(N-1), cy(i)); ctx.stroke();
+  ctx.strokeStyle='#8B5A00'; ctx.lineWidth=.8;
+  for (let i=0;i<N;i++){
+    ctx.beginPath();ctx.moveTo(cx(i),cy(0));ctx.lineTo(cx(i),cy(N-1));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx(0),cy(i));ctx.lineTo(cx(N-1),cy(i));ctx.stroke();
   }
-  ctx.lineWidth = 1.6;
-  ctx.strokeRect(cx(0), cy(0), cs * (N-1), cs * (N-1));
-
-  // Hoshi (star points) — 19×19: corners/edges/center at 3,9,15
-  ctx.fillStyle = '#5A3800';
-  for (const r of [3, 9, 15]) for (const c of [3, 9, 15]) {
-    ctx.beginPath();
-    ctx.arc(cx(c), cy(r), Math.max(cs * .09, 2.5), 0, Math.PI * 2);
-    ctx.fill();
+  ctx.lineWidth=1.6; ctx.strokeRect(cx(0),cy(0),cs*(N-1),cs*(N-1));
+  ctx.fillStyle='#5A3800';
+  for (const r of [3,9,15]) for (const c of [3,9,15]){
+    ctx.beginPath(); ctx.arc(cx(c),cy(r),Math.max(cs*.09,2.5),0,Math.PI*2); ctx.fill();
   }
-
-  // Win line
-  if (winLine && winLine.length >= 2) {
+  if (winLine && winLine.length>=2){
+    ctx.save(); ctx.strokeStyle='rgba(255,50,50,.65)'; ctx.lineWidth=cs*.22; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(cx(winLine[0][1]),cy(winLine[0][0]));
+    for (const[r,c]of winLine) ctx.lineTo(cx(c),cy(r));
+    ctx.stroke(); ctx.restore();
+  }
+  if (turn===BLACK && !over){
+    for (const k of forbiddenSet){ const r=Math.floor(k/N),c=k%N; drawX(r,c); }
+  }
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) if (board[r][c]!==EMPTY) drawStone(r,c,board[r][c]);
+  if (lastMove){
+    const[lr,lc]=lastMove; const x=cx(lc),y=cy(lr); const dr=Math.max(cs*.13,3.5);
+    ctx.beginPath(); ctx.arc(x,y,dr,0,Math.PI*2);
+    ctx.fillStyle=board[lr][lc]===BLACK?'rgba(255,255,255,.85)':'rgba(0,0,0,.65)'; ctx.fill();
+  }
+  if (flashMsg){
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,50,50,.65)';
-    ctx.lineWidth = cs * .22; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx(winLine[0][1]), cy(winLine[0][0]));
-    for (const [r, c] of winLine) ctx.lineTo(cx(c), cy(r));
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Forbidden cell markers (✕) — shown when it's black's turn
-  if (turn === BLACK && !over) {
-    for (const k of forbiddenSet) {
-      const r = Math.floor(k / N), c = k % N;
-      drawX(r, c);
-    }
-  }
-
-  // Stones
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++)
-    if (board[r][c] !== EMPTY) drawStone(r, c, board[r][c]);
-
-  // Last move dot
-  if (lastMove) {
-    const [lr, lc] = lastMove;
-    const x = cx(lc), y = cy(lr);
-    const dr = Math.max(cs * .13, 3.5);
-    ctx.beginPath(); ctx.arc(x, y, dr, 0, Math.PI * 2);
-    ctx.fillStyle = board[lr][lc] === BLACK ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.65)';
-    ctx.fill();
-  }
-
-  // Flash message (금수!)
-  if (flashMsg) {
-    ctx.save();
-    ctx.font = `bold ${Math.max(cs * 1.1, 22)}px 'Noto Sans KR', sans-serif`;
-    ctx.fillStyle = 'rgba(220,40,40,.92)';
-    ctx.strokeStyle = 'rgba(255,255,255,.7)';
-    ctx.lineWidth = 3;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.strokeText(flashMsg, sz / 2, sz / 2);
-    ctx.fillText(flashMsg, sz / 2, sz / 2);
+    ctx.font=`bold ${Math.max(cs*1.1,22)}px 'Noto Sans KR',sans-serif`;
+    ctx.fillStyle='rgba(220,40,40,.92)'; ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=3;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.strokeText(flashMsg,sz/2,sz/2); ctx.fillText(flashMsg,sz/2,sz/2);
     ctx.restore();
   }
 }
 
-function drawX(r, c) {
-  const x = cx(c), y = cy(r), s = Math.max(cs * .19, 4);
-  ctx.save();
-  ctx.strokeStyle = 'rgba(210,50,50,.55)';
-  ctx.lineWidth = Math.max(cs * .08, 1.2);
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y + s);
-  ctx.moveTo(x + s, y - s); ctx.lineTo(x - s, y + s);
-  ctx.stroke();
-  ctx.restore();
+function drawX(r,c){
+  const x=cx(c),y=cy(r),s=Math.max(cs*.19,4);
+  ctx.save(); ctx.strokeStyle='rgba(210,50,50,.55)'; ctx.lineWidth=Math.max(cs*.08,1.2); ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x-s,y-s); ctx.lineTo(x+s,y+s); ctx.moveTo(x+s,y-s); ctx.lineTo(x-s,y+s); ctx.stroke(); ctx.restore();
 }
 
-function drawStone(r, c, col) {
-  const x = cx(c), y = cy(r), rad = cs * .44;
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,.55)';
-  ctx.shadowBlur = rad * .7;
-  ctx.shadowOffsetX = rad * .1; ctx.shadowOffsetY = rad * .15;
-  ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
-  if (col === BLACK) {
-    const g = ctx.createRadialGradient(x-rad*.3, y-rad*.3, 0, x, y, rad);
-    g.addColorStop(0, '#505050'); g.addColorStop(.5, '#181818'); g.addColorStop(1, '#000');
-    ctx.fillStyle = g;
-  } else {
-    const g = ctx.createRadialGradient(x-rad*.3, y-rad*.3, 0, x, y, rad);
-    g.addColorStop(0, '#ffffff'); g.addColorStop(.6, '#e8e8e8'); g.addColorStop(1, '#aaaaaa');
-    ctx.fillStyle = g;
-  }
+function drawStone(r,c,col){
+  const x=cx(c),y=cy(r),rad=cs*.44;
+  ctx.save(); ctx.shadowColor='rgba(0,0,0,.55)'; ctx.shadowBlur=rad*.7; ctx.shadowOffsetX=rad*.1; ctx.shadowOffsetY=rad*.15;
+  ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2);
+  if (col===BLACK){const g=ctx.createRadialGradient(x-rad*.3,y-rad*.3,0,x,y,rad);g.addColorStop(0,'#505050');g.addColorStop(.5,'#181818');g.addColorStop(1,'#000');ctx.fillStyle=g;}
+  else{const g=ctx.createRadialGradient(x-rad*.3,y-rad*.3,0,x,y,rad);g.addColorStop(0,'#ffffff');g.addColorStop(.6,'#e8e8e8');g.addColorStop(1,'#aaaaaa');ctx.fillStyle=g;}
   ctx.fill(); ctx.restore();
-  const sg = ctx.createRadialGradient(x-rad*.42, y-rad*.46, 0, x-rad*.1, y-rad*.1, rad*.78);
-  sg.addColorStop(0, col === BLACK ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.88)');
-  sg.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
-  ctx.fillStyle = sg; ctx.fill();
+  const sg=ctx.createRadialGradient(x-rad*.42,y-rad*.46,0,x-rad*.1,y-rad*.1,rad*.78);
+  sg.addColorStop(0,col===BLACK?'rgba(255,255,255,.28)':'rgba(255,255,255,.88)'); sg.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.fillStyle=sg; ctx.fill();
 }
 
 // ── GAME ──
-function startGame(d) {
-  diff = d;
-  document.getElementById('startScreen').style.display = 'none';
-  document.getElementById('gameScreen').style.display = 'flex';
-  document.getElementById('diffBadge').textContent = DNAME[d];
+function startGame(d){
+  diff=d;
+  document.getElementById('startScreen').style.display='none';
+  document.getElementById('gameScreen').style.display='flex';
+  const badge=document.getElementById('diffBadge');
+  badge.textContent=DNAME[d];
+  badge.className='diff-badge'+(d==='god'?' god-badge':'');
   if (!canvas) initCanvas();
-  resize();
-  newGame();
+  resize(); newGame();
 }
 
-function newGame() {
-  board = Array.from({length: N}, () => new Array(N).fill(EMPTY));
-  over = false; lastMove = null; winLine = null; aiBusy = false;
-  forbiddenSet.clear();
-  clearFlash();
-  if (Math.random() < .5) { humCol = BLACK; aiCol = WHITE; }
-  else { humCol = WHITE; aiCol = BLACK; }
-  turn = BLACK;
+function newGame(){
+  destroyGodWorker();
+  board=Array.from({length:N},()=>new Array(N).fill(EMPTY));
+  over=false; lastMove=null; winLine=null; aiBusy=false;
+  forbiddenSet.clear(); clearFlash();
+  if (Math.random()<.5){humCol=BLACK;aiCol=WHITE;}else{humCol=WHITE;aiCol=BLACK;}
+  turn=BLACK;
+  hideOverlay(); updateForbidden(); updateStatus(); render();
+  if (aiCol===BLACK) scheduleAI();
+}
+
+function showStart(){
+  destroyGodWorker();
   hideOverlay();
-  updateForbidden();
-  updateStatus();
-  render();
-  if (aiCol === BLACK) scheduleAI();
+  document.getElementById('gameScreen').style.display='none';
+  document.getElementById('startScreen').style.display='flex';
 }
 
-function showStart() {
-  hideOverlay();
-  document.getElementById('gameScreen').style.display = 'none';
-  document.getElementById('startScreen').style.display = 'flex';
+function onTap(e){
+  if (over||aiBusy||turn!==humCol) return;
+  const rect=canvas.getBoundingClientRect();
+  const sx=canvas.width/rect.width, sy=canvas.height/rect.height;
+  const px=(e.clientX-rect.left)*sx, py=(e.clientY-rect.top)*sy;
+  const c=Math.round((px-mg)/cs), r=Math.round((py-mg)/cs);
+  if (r<0||r>=N||c<0||c>=N||board[r][c]!==EMPTY) return;
+  if (turn===BLACK && forbiddenSet.has(r*N+c)){showFlash('금수!');return;}
+  place(r,c,humCol); render();
+  const wl=checkWin(r,c); if(wl){endGame(wl,true);return;}
+  if(full()){endGame(null,null);return;}
+  turn=aiCol; updateForbidden(); updateStatus(); scheduleAI();
 }
 
-function onTap(e) {
-  if (over || aiBusy || turn !== humCol) return;
-  const rect = canvas.getBoundingClientRect();
-  const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
-  const px = (e.clientX - rect.left) * sx, py = (e.clientY - rect.top) * sy;
-  const c = Math.round((px - mg) / cs), r = Math.round((py - mg) / cs);
-  if (r < 0 || r >= N || c < 0 || c >= N || board[r][c] !== EMPTY) return;
+function place(r,c,col){board[r][c]=col;lastMove=[r,c];}
+function full(){for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(board[r][c]===EMPTY)return false;return true;}
 
-  // Renju: check forbidden for black
-  if (turn === BLACK && forbiddenSet.has(r * N + c)) {
-    showFlash('금수!');
-    return;
-  }
-
-  place(r, c, humCol);
-  render();
-  const wl = checkWin(r, c);
-  if (wl) { endGame(wl, true); return; }
-  if (full()) { endGame(null, null); return; }
-  turn = aiCol;
-  updateForbidden();
-  updateStatus();
-  scheduleAI();
-}
-
-function place(r, c, col) { board[r][c] = col; lastMove = [r, c]; }
-
-function full() {
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (board[r][c] === EMPTY) return false;
-  return true;
-}
-
-// Win check respecting Renju: black needs exactly 5; white needs 5+
-function checkWin(r, c) {
-  const col = board[r][c];
-  if (col === EMPTY) return null;
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (const [dr, dc] of dirs) {
-    const line = [[r, c]];
-    for (let d = 1; d <= 9; d++) {
-      const nr = r+dr*d, nc = c+dc*d;
-      if (nr<0||nr>=N||nc<0||nc>=N||board[nr][nc]!==col) break;
-      line.push([nr, nc]);
-    }
-    for (let d = 1; d <= 9; d++) {
-      const nr = r-dr*d, nc = c-dc*d;
-      if (nr<0||nr>=N||nc<0||nc>=N||board[nr][nc]!==col) break;
-      line.push([nr, nc]);
-    }
-    // Black wins only with exactly 5; white wins with 5+
-    if (col === BLACK && line.length === 5) return line;
-    if (col === WHITE && line.length >= 5) return line.slice(0, 5);
+function checkWin(r,c){
+  const col=board[r][c]; if(col===EMPTY) return null;
+  const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    const line=[[r,c]];
+    for(let d=1;d<=9;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N||board[nr][nc]!==col)break;line.push([nr,nc]);}
+    for(let d=1;d<=9;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N||board[nr][nc]!==col)break;line.push([nr,nc]);}
+    if(col===BLACK&&line.length===5) return line;
+    if(col===WHITE&&line.length>=5)  return line.slice(0,5);
   }
   return null;
 }
 
-function endGame(wl, humanWon) {
-  winLine = wl; over = true; render();
-  setTimeout(() => showResult(humanWon), 450);
-}
+function endGame(wl,humanWon){winLine=wl;over=true;render();setTimeout(()=>showResult(humanWon),450);}
 
-function scheduleAI() {
-  aiBusy = true; updateStatus();
-  const base = diff === 'expert' ? 350 : 200;
-  setTimeout(doAI, base + Math.random() * 200);
-}
-
-function doAI() {
-  if (over) return;
-  const [r, c] = getBest();
-  place(r, c, aiCol);
-  aiBusy = false; turn = humCol;
-  render();
-  const wl = checkWin(r, c);
-  if (wl) { endGame(wl, false); return; }
-  if (full()) { endGame(null, null); return; }
-  updateForbidden();
+function scheduleAI(){
+  aiBusy=true;
+  const tw=document.getElementById('thinkWrap');
+  const lbl=document.getElementById('thinkLabel');
+  tw.className='thinking-wrap'+(diff==='god'?' god-think':'');
+  lbl.textContent=diff==='god'?'신 계산 중':'AI 생각 중';
   updateStatus();
+  const base=diff==='god'||diff==='expert'?300:200;
+  setTimeout(doAI, base+Math.random()*150);
+}
+
+function doAI(){
+  if (over) return;
+  if (diff==='god'){doGodAI();return;}
+  finishAITurn(...getBest());
+}
+
+function finishAITurn(r,c){
+  place(r,c,aiCol);
+  aiBusy=false; turn=humCol; render();
+  const wl=checkWin(r,c); if(wl){endGame(wl,false);return;}
+  if(full()){endGame(null,null);return;}
+  updateForbidden(); updateStatus();
 }
 
 // ── STATUS UI ──
-function updateStatus() {
-  const dot = document.getElementById('turnDot');
-  const txt = document.getElementById('statusText');
-  const tw = document.getElementById('thinkWrap');
-  if (over) return;
-  if (aiBusy) {
-    tw.style.display = 'flex';
-    txt.textContent = ''; dot.className = 'stone-dot'; dot.style.display = 'none';
-  } else {
-    tw.style.display = 'none'; dot.style.display = '';
-    dot.className = 'stone-dot ' + (turn === BLACK ? 'black' : 'white');
-    const cname = turn === BLACK ? '흑' : '백';
-    txt.textContent = turn === humCol ? `당신 (${cname}) 차례` : `AI (${cname}) 차례`;
+function updateStatus(){
+  const dot=document.getElementById('turnDot');
+  const txt=document.getElementById('statusText');
+  const tw=document.getElementById('thinkWrap');
+  if(over)return;
+  if(aiBusy){
+    tw.style.display='flex'; txt.textContent=''; dot.className='stone-dot'; dot.style.display='none';
+  }else{
+    tw.style.display='none'; dot.style.display='';
+    dot.className='stone-dot '+(turn===BLACK?'black':'white');
+    const cname=turn===BLACK?'흑':'백';
+    txt.textContent=turn===humCol?`당신 (${cname}) 차례`:`AI (${cname}) 차례`;
   }
 }
 
-function showResult(humanWon) {
-  document.getElementById('overlay').style.display = 'flex';
-  const e = document.getElementById('resEmoji');
-  const t = document.getElementById('resTitle');
-  const s = document.getElementById('resSub');
-  if (humanWon === null) { e.textContent='🤝'; t.textContent='무승부!'; s.textContent='바둑판이 가득 찼습니다'; }
-  else if (humanWon)     { e.textContent='🏆'; t.textContent='승리!';   s.textContent='5목을 완성했습니다!'; }
-  else                   { e.textContent='😔'; t.textContent='패배...'; s.textContent='AI가 5목을 완성했습니다'; }
+function showResult(humanWon){
+  document.getElementById('overlay').style.display='flex';
+  const e=document.getElementById('resEmoji'),t=document.getElementById('resTitle'),s=document.getElementById('resSub');
+  if(humanWon===null){e.textContent='🤝';t.textContent='무승부!';s.textContent='바둑판이 가득 찼습니다';}
+  else if(humanWon){e.textContent='🏆';t.textContent='승리!';s.textContent='5목을 완성했습니다!';}
+  else{e.textContent='😔';t.textContent='패배...';s.textContent='AI가 5목을 완성했습니다';}
 }
-function hideOverlay() { document.getElementById('overlay').style.display = 'none'; }
+function hideOverlay(){document.getElementById('overlay').style.display='none';}
+function showFlash(msg){flashMsg=msg;render();clearTimeout(flashTimer);flashTimer=setTimeout(clearFlash,700);}
+function clearFlash(){flashMsg='';render();}
 
-function showFlash(msg) {
-  flashMsg = msg;
-  render();
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(clearFlash, 700);
-}
-function clearFlash() { flashMsg = ''; render(); }
-
-// ── RENJU FORBIDDEN MOVE LOGIC ──
-// All functions that inspect the board accept board array `b` as first param.
-// isForbidden assumes b[r][c] is EMPTY and temporarily places BLACK there.
-// Only BLACK is subject to forbidden rules.
-
-function runLen(b, r, c, dr, dc) {
-  const col = b[r][c];
-  let len = 1;
-  for (let d = 1; d < N; d++) {
-    const nr=r+dr*d, nc=c+dc*d;
-    if (nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col) break;
-    len++;
-  }
-  for (let d = 1; d < N; d++) {
-    const nr=r-dr*d, nc=c-dc*d;
-    if (nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col) break;
-    len++;
-  }
+// ── RENJU FORBIDDEN LOGIC ──
+function runLen(b,r,c,dr,dc){
+  const col=b[r][c];let len=1;
+  for(let d=1;d<N;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;len++;}
+  for(let d=1;d<N;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;len++;}
   return len;
 }
-
-// Count distinct directions that contain a "four" pattern (4 blacks + 1 empty in a window of 5)
-function countFours(b, r, c) {
-  let cnt = 0;
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (const [dr,dc] of dirs) {
-    let found = false;
-    for (let k = 0; k <= 4 && !found; k++) {
-      const sr=r-k*dr, sc=c-k*dc;
-      let blacks=0, empties=0, valid=true;
-      for (let i = 0; i < 5; i++) {
-        const nr=sr+i*dr, nc=sc+i*dc;
-        if (nr<0||nr>=N||nc<0||nc>=N) { valid=false; break; }
-        const v = b[nr][nc];
-        if (v===BLACK) blacks++;
-        else if (v===EMPTY) empties++;
-        else { valid=false; break; }
-      }
-      if (valid && blacks===4 && empties===1) found=true;
+function countFours(b,r,c){
+  let cnt=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let found=false;
+    for(let k=0;k<=4&&!found;k++){
+      const sr=r-k*dr,sc=c-k*dc;let blacks=0,empties=0,valid=true;
+      for(let i=0;i<5;i++){const nr=sr+i*dr,nc=sc+i*dc;if(nr<0||nr>=N||nc<0||nc>=N){valid=false;break;}const v=b[nr][nc];if(v===BLACK)blacks++;else if(v===EMPTY)empties++;else{valid=false;break;}}
+      if(valid&&blacks===4&&empties===1)found=true;
     }
-    if (found) cnt++;
+    if(found)cnt++;
   }
   return cnt;
 }
-
-// Count distinct directions that contain an "open three" (3 blacks + 3 empties in a window of 6
-// that can become an open four _XXXX_ by filling one empty)
-function countOpenThrees(b, r, c) {
-  let cnt = 0;
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (const [dr,dc] of dirs) {
-    let found = false;
-    for (let k = 0; k <= 5 && !found; k++) {
-      const sr=r-k*dr, sc=c-k*dc;
-      const cells = []; let valid = true;
-      for (let i = 0; i < 6; i++) {
-        const nr=sr+i*dr, nc=sc+i*dc;
-        if (nr<0||nr>=N||nc<0||nc>=N) { valid=false; break; }
-        cells.push(b[nr][nc]);
-      }
-      if (!valid) continue;
-      let blacks=0, empties=0, hasOpp=false;
-      for (const v of cells) {
-        if (v===BLACK) blacks++;
-        else if (v===EMPTY) empties++;
-        else { hasOpp=true; break; }
-      }
-      if (hasOpp || blacks!==3 || empties!==3) continue;
-      // Check if any empty cell, when filled with BLACK, creates _XXXX_
-      for (let i = 0; i < 6 && !found; i++) {
-        if (cells[i] !== EMPTY) continue;
-        const t = cells.slice(); t[i] = BLACK;
-        if (t[0]===EMPTY && t[1]===BLACK && t[2]===BLACK && t[3]===BLACK && t[4]===BLACK && t[5]===EMPTY)
-          found = true;
-      }
+function countOpenThrees(b,r,c){
+  let cnt=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let found=false;
+    for(let k=0;k<=5&&!found;k++){
+      const sr=r-k*dr,sc=c-k*dc;const cells=[];let valid=true;
+      for(let i=0;i<6;i++){const nr=sr+i*dr,nc=sc+i*dc;if(nr<0||nr>=N||nc<0||nc>=N){valid=false;break;}cells.push(b[nr][nc]);}
+      if(!valid)continue;
+      let blacks=0,empties=0,hasOpp=false;
+      for(const v of cells){if(v===BLACK)blacks++;else if(v===EMPTY)empties++;else{hasOpp=true;break;}}
+      if(hasOpp||blacks!==3||empties!==3)continue;
+      for(let i=0;i<6&&!found;i++){if(cells[i]!==EMPTY)continue;const t=cells.slice();t[i]=BLACK;if(t[0]===EMPTY&&t[1]===BLACK&&t[2]===BLACK&&t[3]===BLACK&&t[4]===BLACK&&t[5]===EMPTY)found=true;}
     }
-    if (found) cnt++;
+    if(found)cnt++;
   }
   return cnt;
 }
-
-// b[r][c] must already be BLACK when this is called
-function isForbiddenPlaced(b, r, c) {
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  // Exact five = win → never forbidden
-  for (const [dr,dc] of dirs) if (runLen(b,r,c,dr,dc)===5) return false;
-  // Overline (6+)
-  for (const [dr,dc] of dirs) if (runLen(b,r,c,dr,dc)>=6) return true;
-  // 4-4
-  if (countFours(b,r,c) >= 2) return true;
-  // 3-3
-  if (countOpenThrees(b,r,c) >= 2) return true;
+function isForbiddenPlaced(b,r,c){
+  const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs)if(runLen(b,r,c,dr,dc)===5)return false;
+  for(const[dr,dc]of dirs)if(runLen(b,r,c,dr,dc)>=6)return true;
+  if(countFours(b,r,c)>=2)return true;
+  if(countOpenThrees(b,r,c)>=2)return true;
   return false;
 }
-
-// Safe wrapper: temporarily places BLACK, checks, then restores
-function isForbidden(b, r, c) {
-  b[r][c] = BLACK;
-  const f = isForbiddenPlaced(b, r, c);
-  b[r][c] = EMPTY;
-  return f;
+function isForbidden(b,r,c){b[r][c]=BLACK;const f=isForbiddenPlaced(b,r,c);b[r][c]=EMPTY;return f;}
+function filterForbidden(b,moves){return moves.filter(([r,c])=>!isForbidden(b,r,c));}
+function updateForbidden(){
+  forbiddenSet.clear();if(turn!==BLACK||over)return;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(board[r][c]!==EMPTY)continue;if(isForbidden(board,r,c))forbiddenSet.add(r*N+c);}
 }
 
-// Recompute forbidden cells for current turn; only meaningful when turn===BLACK
-function updateForbidden() {
-  forbiddenSet.clear();
-  if (turn !== BLACK || over) return;
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-    if (board[r][c] !== EMPTY) continue;
-    if (isForbidden(board, r, c)) forbiddenSet.add(r * N + c);
-  }
-}
-
-// ── AI ──
-
-// Win check for a just-placed stone; respects Renju (black needs exactly 5)
-function winFast(b, r, c) {
-  const col = b[r][c];
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (const [dr,dc] of dirs) {
-    let n = 1;
-    for (let d=1;d<=9;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
-    for (let d=1;d<=9;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
-    if (col===BLACK ? n===5 : n>=5) return true;
+// ── REGULAR AI (easy / medium / hard / expert) ──
+function winFast(b,r,c){
+  const col=b[r][c];const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let n=1;
+    for(let d=1;d<=9;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
+    for(let d=1;d<=9;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
+    if(col===BLACK?n===5:n>=5)return true;
   }
   return false;
 }
-
-function evalBoard(b, ai, hu) {
-  let sc = 0;
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
-    const col=b[r][c]; if(col===EMPTY) continue;
-    for (const [dr,dc] of dirs) {
-      const pr=r-dr, pc=c-dc;
-      if (pr>=0&&pr<N&&pc>=0&&pc<N&&b[pr][pc]===col) continue;
-      let len=0, nr=r, nc=c;
-      while (nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===col){len++;nr+=dr;nc+=dc;}
+function evalBoard(b,ai,hu){
+  let sc=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const col=b[r][c];if(col===EMPTY)continue;
+    for(const[dr,dc]of dirs){
+      const pr=r-dr,pc=c-dc;if(pr>=0&&pr<N&&pc>=0&&pc<N&&b[pr][pc]===col)continue;
+      let len=0,nr=r,nc=c;while(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===col){len++;nr+=dr;nc+=dc;}
       const op=(pr>=0&&pr<N&&pc>=0&&pc<N&&b[pr][pc]===EMPTY)?1:0;
-      const on=(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===EMPTY)?1:0;
-      const oe=op+on;
+      const on=(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===EMPTY)?1:0;const oe=op+on;
       let ps=0;
-      if(len>=5)ps=S.WIN;
-      else if(len===4)ps=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;
-      else if(len===3)ps=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;
-      else if(len===2)ps=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
-      sc += col===ai ? ps : -ps*1.05;
+      if(len>=5)ps=S.WIN;else if(len===4)ps=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;
+      else if(len===3)ps=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;else if(len===2)ps=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
+      sc+=col===ai?ps:-ps*1.05;
     }
   }
   return sc;
 }
-
-function cellThreat(b, r, c, col) {
-  b[r][c] = col;
-  let sc = 0;
-  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-  for (const [dr,dc] of dirs) {
-    let len=1, fwd=0, bwd=0;
+function cellThreat(b,r,c,col){
+  b[r][c]=col;let sc=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let len=1,fwd=0,bwd=0;
     for(let d=1;d<=4;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N)break;if(b[nr][nc]===col)len++;else{if(b[nr][nc]===EMPTY)fwd=1;break;}}
     for(let d=1;d<=4;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N)break;if(b[nr][nc]===col)len++;else{if(b[nr][nc]===EMPTY)bwd=1;break;}}
     const oe=fwd+bwd;
-    if(len>=5)sc+=S.WIN;
-    else if(len===4)sc+=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;
-    else if(len===3)sc+=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;
-    else if(len===2)sc+=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
+    if(len>=5)sc+=S.WIN;else if(len===4)sc+=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;
+    else if(len===3)sc+=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;else if(len===2)sc+=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
   }
-  b[r][c] = EMPTY;
-  return sc;
+  b[r][c]=EMPTY;return sc;
 }
-
-function quickSc(b, r, c) {
-  let s=0;
-  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
-    if(!dr&&!dc)continue;
-    const nr=r+dr,nc=c+dc;
-    if(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]!==EMPTY)s++;
+function quickSc(b,r,c){
+  let s=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;const nr=r+dr,nc=c+dc;if(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]!==EMPTY)s++;}return s;
+}
+function cands(b,maxN){
+  const seen=new Set(),res=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(b[r][c]===EMPTY)continue;
+    for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){const nr=r+dr,nc=c+dc;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==EMPTY)continue;const k=nr*N+nc;if(!seen.has(k)){seen.add(k);res.push([nr,nc]);}}
   }
-  return s;
+  if(!res.length)return[[CENTER,CENTER]];
+  if(diff==='hard'||diff==='expert'||diff==='god'){
+    res.sort((p,q)=>{const sp=cellThreat(b,p[0],p[1],aiCol)+cellThreat(b,p[0],p[1],humCol);const sq=cellThreat(b,q[0],q[1],aiCol)+cellThreat(b,q[0],q[1],humCol);return sq-sp;});
+  }else{res.sort((p,q)=>quickSc(b,q[0],q[1])-quickSc(b,p[0],p[1]));}
+  return maxN&&res.length>maxN?res.slice(0,maxN):res;
 }
-
-// Filter candidate move list: remove cells forbidden for BLACK
-function filterForbidden(b, moves) {
-  return moves.filter(([r,c]) => !isForbidden(b, r, c));
-}
-
-function cands(b, maxN) {
-  const seen = new Set(), res = [];
-  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
-    if (b[r][c]===EMPTY) continue;
-    for (let dr=-2;dr<=2;dr++) for (let dc=-2;dc<=2;dc++) {
-      const nr=r+dr, nc=c+dc;
-      if (nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==EMPTY) continue;
-      const k=nr*N+nc; if (!seen.has(k)) { seen.add(k); res.push([nr,nc]); }
-    }
-  }
-  if (!res.length) return [[CENTER, CENTER]];
-  if (diff==='hard'||diff==='expert') {
-    res.sort((p,q) => {
-      const sp=cellThreat(b,p[0],p[1],aiCol)+cellThreat(b,p[0],p[1],humCol);
-      const sq=cellThreat(b,q[0],q[1],aiCol)+cellThreat(b,q[0],q[1],humCol);
-      return sq-sp;
-    });
-  } else {
-    res.sort((p,q) => quickSc(b,q[0],q[1]) - quickSc(b,p[0],p[1]));
-  }
-  return maxN && res.length > maxN ? res.slice(0, maxN) : res;
-}
-
-function orderMoves(b, mv, cur, opp) {
-  const wins=[], blocks=[], rest=[];
-  for (const [r,c] of mv) {
-    b[r][c]=cur; if(winFast(b,r,c)){b[r][c]=EMPTY;wins.push([r,c]);continue;} b[r][c]=EMPTY;
-    b[r][c]=opp; if(winFast(b,r,c)){b[r][c]=EMPTY;blocks.push([r,c]);continue;} b[r][c]=EMPTY;
+function orderMoves(b,mv,cur,opp){
+  const wins=[],blocks=[],rest=[];
+  for(const[r,c]of mv){
+    b[r][c]=cur;if(winFast(b,r,c)){b[r][c]=EMPTY;wins.push([r,c]);continue;}b[r][c]=EMPTY;
+    b[r][c]=opp;if(winFast(b,r,c)){b[r][c]=EMPTY;blocks.push([r,c]);continue;}b[r][c]=EMPTY;
     rest.push([r,c]);
   }
-  return [...wins,...blocks,...rest];
+  return[...wins,...blocks,...rest];
 }
-
-function mm(b, depth, alpha, beta, isMax, ai, hu, lr, lc, maxC) {
-  if (lr !== undefined && winFast(b,lr,lc)) {
-    const w=b[lr][lc]; return w===ai ? S.WIN+depth : -(S.WIN+depth);
-  }
-  if (depth===0) return evalBoard(b,ai,hu);
-
-  let mv = cands(b, maxC);
-  const cur = isMax ? ai : hu;
-  const opp = isMax ? hu : ai;
-
-  // Apply forbidden filter for black
-  if (cur === BLACK) {
-    mv = filterForbidden(b, mv);
-    if (!mv.length) return isMax ? -(S.WIN) : S.WIN; // no legal moves = bad
-  }
-
-  const ord = orderMoves(b, mv, cur, opp);
-  if (!ord.length) return 0;
-
-  if (isMax) {
-    let val = -Infinity;
-    for (const [r,c] of ord) {
-      b[r][c]=cur;
-      val=Math.max(val, mm(b,depth-1,alpha,beta,false,ai,hu,r,c,maxC));
-      b[r][c]=EMPTY;
-      alpha=Math.max(alpha,val);
-      if (alpha>=beta) break;
-    }
-    return val;
-  } else {
-    let val = Infinity;
-    for (const [r,c] of ord) {
-      b[r][c]=cur;
-      val=Math.min(val, mm(b,depth-1,alpha,beta,true,ai,hu,r,c,maxC));
-      b[r][c]=EMPTY;
-      beta=Math.min(beta,val);
-      if (alpha>=beta) break;
-    }
-    return val;
+function mm(b,depth,alpha,beta,isMax,ai,hu,lr,lc,maxC){
+  if(lr!==undefined&&winFast(b,lr,lc)){const w=b[lr][lc];return w===ai?S.WIN+depth:-(S.WIN+depth);}
+  if(depth===0)return evalBoard(b,ai,hu);
+  let mv=cands(b,maxC);const cur=isMax?ai:hu,opp=isMax?hu:ai;
+  if(cur===BLACK){mv=filterForbidden(b,mv);if(!mv.length)return isMax?-S.WIN:S.WIN;}
+  const ord=orderMoves(b,mv,cur,opp);if(!ord.length)return 0;
+  if(isMax){
+    let val=-Infinity;for(const[r,c]of ord){b[r][c]=cur;val=Math.max(val,mm(b,depth-1,alpha,beta,false,ai,hu,r,c,maxC));b[r][c]=EMPTY;alpha=Math.max(alpha,val);if(alpha>=beta)break;}return val;
+  }else{
+    let val=Infinity;for(const[r,c]of ord){b[r][c]=cur;val=Math.min(val,mm(b,depth-1,alpha,beta,true,ai,hu,r,c,maxC));b[r][c]=EMPTY;beta=Math.min(beta,val);if(alpha>=beta)break;}return val;
   }
 }
-
-function getBest() {
-  const {depth, cands:maxC, noise} = CFG[diff];
-  let mv = cands(board, maxC);
-
-  // Apply forbidden filter when AI plays black
-  if (aiCol === BLACK) {
-    mv = filterForbidden(board, mv);
-    if (!mv.length) return [CENTER, CENTER];
-  }
-
-  // Immediate win
-  for (const [r,c] of mv) {
-    board[r][c]=aiCol;
-    if (winFast(board,r,c)) { board[r][c]=EMPTY; return [r,c]; }
-    board[r][c]=EMPTY;
-  }
-  // Immediate block
-  for (const [r,c] of mv) {
-    board[r][c]=humCol;
-    if (winFast(board,r,c)) {
-      board[r][c]=EMPTY;
-      if (diff==='easy' && Math.random()<noise) continue;
-      return [r,c];
-    }
-    board[r][c]=EMPTY;
-  }
-  // Random for easy
-  if (diff==='easy' && Math.random()<noise*.6)
-    return mv[Math.floor(Math.random()*Math.min(mv.length,5))];
-
-  const ord = orderMoves(board, mv, aiCol, humCol);
-  let best=-Infinity, bestM=ord[0]||mv[0];
-  for (const [r,c] of ord) {
-    board[r][c]=aiCol;
-    let sc=mm(board,depth-1,-Infinity,Infinity,false,aiCol,humCol,r,c,maxC);
-    board[r][c]=EMPTY;
-    if (diff==='easy') sc += (Math.random()-.5)*S.OPEN3*.8;
-    if (sc>best) { best=sc; bestM=[r,c]; }
+function getBest(){
+  const{depth,cands:maxC,noise}=CFG[diff];
+  let mv=cands(board,maxC);
+  if(aiCol===BLACK){mv=filterForbidden(board,mv);if(!mv.length)return[CENTER,CENTER];}
+  for(const[r,c]of mv){board[r][c]=aiCol;if(winFast(board,r,c)){board[r][c]=EMPTY;return[r,c];}board[r][c]=EMPTY;}
+  for(const[r,c]of mv){board[r][c]=humCol;if(winFast(board,r,c)){board[r][c]=EMPTY;if(diff==='easy'&&Math.random()<noise)continue;return[r,c];}board[r][c]=EMPTY;}
+  if(diff==='easy'&&Math.random()<noise*.6)return mv[Math.floor(Math.random()*Math.min(mv.length,5))];
+  const ord=orderMoves(board,mv,aiCol,humCol);
+  let best=-Infinity,bestM=ord[0]||mv[0];
+  for(const[r,c]of ord){
+    board[r][c]=aiCol;let sc=mm(board,depth-1,-Infinity,Infinity,false,aiCol,humCol,r,c,maxC);board[r][c]=EMPTY;
+    if(diff==='easy')sc+=(Math.random()-.5)*S.OPEN3*.8;
+    if(sc>best){best=sc;bestM=[r,c];}
   }
   return bestM;
 }
+
+// ── GOD MODE — Web Worker + Iterative Deepening + Transposition Table ──
+function destroyGodWorker(){if(godWorker){godWorker.terminate();godWorker=null;}}
+
+function doGodAI(){
+  if(!godWorker){
+    const blob=new Blob([GOD_WORKER_SRC],{type:'application/javascript'});
+    godWorker=new Worker(URL.createObjectURL(blob));
+    godWorker.onmessage=e=>{
+      if(!aiBusy||over)return;
+      finishAITurn(e.data.move[0],e.data.move[1]);
+    };
+    godWorker.onerror=()=>finishAITurn(...getBest());
+  }
+  godWorker.postMessage({board:board.map(r=>[...r]),aiCol,humCol});
+}
+
+// Worker source — self-contained, no DOM access
+const GOD_WORKER_SRC = `
+'use strict';
+const N=19,EMPTY=0,BLACK=1,WHITE=2,CENTER=9;
+const S={WIN:100000000,OPEN4:2000000,CLOSE4:1000000,OPEN3:100000,CLOSE3:10000,OPEN2:1000,CLOSE2:100};
+let AI_COL,HU_COL;
+
+// Zobrist hash (32-bit)
+const ZT=new Int32Array(N*N*2);
+for(let i=0;i<ZT.length;i++)ZT[i]=(Math.random()*0x100000000)|0;
+let curHash=0;
+function zh(r,c,col){return ZT[((r*N+c)<<1)+col-1];}
+function hToggle(r,c,col){curHash^=zh(r,c,col);}
+
+// Transposition table (typed arrays for speed)
+const TT_BITS=18,TT_SIZE=1<<TT_BITS,TT_MASK=TT_SIZE-1;
+const EXACT=0,LOWER=1,UPPER=2;
+const tt_h=new Int32Array(TT_SIZE).fill(0x7fffffff);
+const tt_s=new Int32Array(TT_SIZE);
+const tt_d=new Int8Array(TT_SIZE);
+const tt_f=new Uint8Array(TT_SIZE);
+const tt_r=new Int8Array(TT_SIZE);
+const tt_c=new Int8Array(TT_SIZE);
+
+function ttProbe(depth,alpha,beta){
+  const i=curHash&TT_MASK;
+  if(tt_h[i]!==curHash||tt_d[i]<depth)return undefined;
+  const sc=tt_s[i],fl=tt_f[i];
+  if(fl===EXACT)return sc;
+  if(fl===LOWER&&sc>=beta)return sc;
+  if(fl===UPPER&&sc<=alpha)return sc;
+  return undefined;
+}
+function ttMove(){const i=curHash&TT_MASK;if(tt_h[i]!==curHash)return null;return[tt_r[i],tt_c[i]];}
+function ttStore(depth,score,flag,r,c){
+  const i=curHash&TT_MASK;
+  if(tt_h[i]===curHash&&tt_d[i]>depth)return;
+  tt_h[i]=curHash;tt_s[i]=score;tt_d[i]=depth;tt_f[i]=flag;tt_r[i]=r;tt_c[i]=c;
+}
+
+function pS(b,r,c,col){b[r][c]=col;hToggle(r,c,col);}
+function rS(b,r,c,col){b[r][c]=EMPTY;hToggle(r,c,col);}
+
+// ── helpers (identical logic to main thread) ──
+function runLen(b,r,c,dr,dc){
+  const col=b[r][c];let len=1;
+  for(let d=1;d<N;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;len++;}
+  for(let d=1;d<N;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;len++;}
+  return len;
+}
+function countFours(b,r,c){
+  let cnt=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let found=false;
+    for(let k=0;k<=4&&!found;k++){
+      const sr=r-k*dr,sc=c-k*dc;let bl=0,em=0,ok=true;
+      for(let i=0;i<5;i++){const nr=sr+i*dr,nc=sc+i*dc;if(nr<0||nr>=N||nc<0||nc>=N){ok=false;break;}const v=b[nr][nc];if(v===BLACK)bl++;else if(v===EMPTY)em++;else{ok=false;break;}}
+      if(ok&&bl===4&&em===1)found=true;
+    }
+    if(found)cnt++;
+  }
+  return cnt;
+}
+function countOpenThrees(b,r,c){
+  let cnt=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let found=false;
+    for(let k=0;k<=5&&!found;k++){
+      const sr=r-k*dr,sc=c-k*dc;const cells=[];let ok=true;
+      for(let i=0;i<6;i++){const nr=sr+i*dr,nc=sc+i*dc;if(nr<0||nr>=N||nc<0||nc>=N){ok=false;break;}cells.push(b[nr][nc]);}
+      if(!ok)continue;
+      let bl=0,em=0,ho=false;for(const v of cells){if(v===BLACK)bl++;else if(v===EMPTY)em++;else{ho=true;break;}}
+      if(ho||bl!==3||em!==3)continue;
+      for(let i=0;i<6&&!found;i++){if(cells[i]!==EMPTY)continue;const t=cells.slice();t[i]=BLACK;if(t[0]===EMPTY&&t[1]===BLACK&&t[2]===BLACK&&t[3]===BLACK&&t[4]===BLACK&&t[5]===EMPTY)found=true;}
+    }
+    if(found)cnt++;
+  }
+  return cnt;
+}
+function iFP(b,r,c){
+  const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs)if(runLen(b,r,c,dr,dc)===5)return false;
+  for(const[dr,dc]of dirs)if(runLen(b,r,c,dr,dc)>=6)return true;
+  if(countFours(b,r,c)>=2)return true;
+  if(countOpenThrees(b,r,c)>=2)return true;
+  return false;
+}
+function iForbid(b,r,c){b[r][c]=BLACK;const f=iFP(b,r,c);b[r][c]=EMPTY;return f;}
+
+function winFast(b,r,c){
+  const col=b[r][c];const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let n=1;
+    for(let d=1;d<=9;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
+    for(let d=1;d<=9;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
+    if(col===BLACK?n===5:n>=5)return true;
+  }
+  return false;
+}
+function evalBoard(b,ai,hu){
+  let sc=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    const col=b[r][c];if(col===EMPTY)continue;
+    for(const[dr,dc]of dirs){
+      const pr=r-dr,pc=c-dc;if(pr>=0&&pr<N&&pc>=0&&pc<N&&b[pr][pc]===col)continue;
+      let len=0,nr=r,nc=c;while(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===col){len++;nr+=dr;nc+=dc;}
+      const op=(pr>=0&&pr<N&&pc>=0&&pc<N&&b[pr][pc]===EMPTY)?1:0;const on=(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===EMPTY)?1:0;const oe=op+on;
+      let ps=0;if(len>=5)ps=S.WIN;else if(len===4)ps=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;else if(len===3)ps=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;else if(len===2)ps=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
+      sc+=col===ai?ps:-ps*1.05;
+    }
+  }
+  return sc;
+}
+function cellThreat(b,r,c,col){
+  b[r][c]=col;let sc=0;const dirs=[[0,1],[1,0],[1,1],[1,-1]];
+  for(const[dr,dc]of dirs){
+    let len=1,fw=0,bw=0;
+    for(let d=1;d<=4;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N)break;if(b[nr][nc]===col)len++;else{if(b[nr][nc]===EMPTY)fw=1;break;}}
+    for(let d=1;d<=4;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N)break;if(b[nr][nc]===col)len++;else{if(b[nr][nc]===EMPTY)bw=1;break;}}
+    const oe=fw+bw;
+    if(len>=5)sc+=S.WIN;else if(len===4)sc+=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;else if(len===3)sc+=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;else if(len===2)sc+=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
+  }
+  b[r][c]=EMPTY;return sc;
+}
+function cands(b,maxN){
+  const seen=new Set(),res=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+    if(b[r][c]===EMPTY)continue;
+    for(let dr=-2;dr<=2;dr++)for(let dc=-2;dc<=2;dc++){const nr=r+dr,nc=c+dc;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==EMPTY)continue;const k=nr*N+nc;if(!seen.has(k)){seen.add(k);res.push([nr,nc]);}}
+  }
+  if(!res.length)return[[CENTER,CENTER]];
+  res.sort((p,q)=>{const sp=cellThreat(b,p[0],p[1],AI_COL)+cellThreat(b,p[0],p[1],HU_COL);const sq=cellThreat(b,q[0],q[1],AI_COL)+cellThreat(b,q[0],q[1],HU_COL);return sq-sp;});
+  return maxN&&res.length>maxN?res.slice(0,maxN):res;
+}
+function orderMoves(b,mv,cur,opp){
+  const wins=[],blocks=[],rest=[];
+  for(const[r,c]of mv){
+    b[r][c]=cur;if(winFast(b,r,c)){b[r][c]=EMPTY;wins.push([r,c]);continue;}b[r][c]=EMPTY;
+    b[r][c]=opp;if(winFast(b,r,c)){b[r][c]=EMPTY;blocks.push([r,c]);continue;}b[r][c]=EMPTY;
+    rest.push([r,c]);
+  }
+  return[...wins,...blocks,...rest];
+}
+
+// ── Minimax with Transposition Table ──
+let timeUp=false,startTime=0,timeLimit=2800;
+function chkTime(){if(Date.now()-startTime>=timeLimit)timeUp=true;}
+
+function mmGod(b,depth,alpha,beta,isMax,ai,hu,lr,lc,maxC){
+  if(timeUp)return 0;
+  if(lr!==undefined&&winFast(b,lr,lc)){const w=b[lr][lc];return w===ai?S.WIN+depth:-(S.WIN+depth);}
+  const ttv=ttProbe(depth,alpha,beta);if(ttv!==undefined)return ttv;
+  if(depth===0)return evalBoard(b,ai,hu);
+  const cur=isMax?ai:hu,opp=isMax?hu:ai;
+  let mv=cands(b,maxC);
+  if(cur===BLACK){mv=mv.filter(([r,c])=>!iForbid(b,r,c));if(!mv.length)return isMax?-S.WIN:S.WIN;}
+  // TT best-move ordering
+  const tm=ttMove();
+  let ord=orderMoves(b,mv,cur,opp);
+  if(tm){const idx=ord.findIndex(([r,c])=>r===tm[0]&&c===tm[1]);if(idx>0){const m=ord.splice(idx,1)[0];ord.unshift(m);}}
+  const origA=alpha;let best=isMax?-Infinity:Infinity,br=-1,bc=-1;
+  for(const[r,c]of ord){
+    if(timeUp)break;
+    pS(b,r,c,cur);
+    const v=mmGod(b,depth-1,alpha,beta,!isMax,ai,hu,r,c,maxC);
+    rS(b,r,c,cur);
+    if(isMax){if(v>best){best=v;br=r;bc=c;}if(best>alpha)alpha=best;}
+    else{if(v<best){best=v;br=r;bc=c;}if(best<beta)beta=best;}
+    if(alpha>=beta)break;
+  }
+  if(!timeUp&&br>=0){const fl=best>=beta?LOWER:best>origA?EXACT:UPPER;ttStore(depth,best,fl,br,bc);}
+  return best;
+}
+
+// ── Iterative Deepening root search ──
+function searchGod(board,ai,hu){
+  startTime=Date.now();timeUp=false;
+  // Build initial hash
+  curHash=0;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(board[r][c]!==EMPTY)hToggle(r,c,board[r][c]);
+  // Clear TT for fresh search
+  tt_h.fill(0x7fffffff);
+  const MAX_C=15;
+  let mv=cands(board,MAX_C);
+  if(ai===BLACK)mv=mv.filter(([r,c])=>!iForbid(board,r,c));
+  if(!mv.length)return[CENTER,CENTER];
+  // Immediate win?
+  for(const[r,c]of mv){pS(board,r,c,ai);if(winFast(board,r,c)){rS(board,r,c,ai);return[r,c];}rS(board,r,c,ai);}
+  // Best move so far (from immediate block or shallowest search)
+  let bestMove=null;
+  for(const[r,c]of mv){board[r][c]=hu;if(winFast(board,r,c)){board[r][c]=EMPTY;bestMove=[r,c];break;}board[r][c]=EMPTY;}
+  // Iterative deepening: depth 1 → 8, stop when time runs out
+  for(let depth=1;depth<=8;depth++){
+    chkTime();if(timeUp)break;
+    mv=cands(board,MAX_C);
+    if(ai===BLACK)mv=mv.filter(([r,c])=>!iForbid(board,r,c));
+    if(!mv.length)break;
+    // Prioritize TT best move at root
+    const tm=ttMove();
+    let ord=orderMoves(board,mv,ai,hu);
+    if(tm){const idx=ord.findIndex(([r,c])=>r===tm[0]&&c===tm[1]);if(idx>0){const m=ord.splice(idx,1)[0];ord.unshift(m);}}
+    let iterBest=-Infinity,iterMove=null,complete=true;
+    for(const[r,c]of ord){
+      chkTime();if(timeUp){complete=false;break;}
+      pS(board,r,c,ai);
+      const sc=mmGod(board,depth-1,-Infinity,Infinity,false,ai,hu,r,c,MAX_C);
+      rS(board,r,c,ai);
+      if(sc>iterBest){iterBest=sc;iterMove=[r,c];}
+    }
+    if(complete&&iterMove){bestMove=iterMove;if(iterBest>=S.WIN)break;}
+    else if(!bestMove&&iterMove)bestMove=iterMove;
+  }
+  return bestMove||mv[0]||[CENTER,CENTER];
+}
+
+self.onmessage=function(e){
+  AI_COL=e.data.aiCol;HU_COL=e.data.humCol;
+  const move=searchGod(e.data.board,AI_COL,HU_COL);
+  self.postMessage({move});
+};
+`;
 </script>
 </body>
 </html>
