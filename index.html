@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>오목 (렌주룰)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#1a0f0a;
+  background-image:radial-gradient(ellipse at top,#2d1a10 0%,#1a0f0a 70%);
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Noto Sans KR',sans-serif;color:#f5deb3;overflow-x:hidden;
+}
+#startScreen{
+  display:flex;flex-direction:column;align-items:center;gap:1.6rem;
+  padding:2.8rem 3.2rem;
+  background:rgba(30,16,8,0.92);border:1px solid #6b4318;border-radius:18px;
+  box-shadow:0 0 50px rgba(180,120,40,0.2),0 8px 40px rgba(0,0,0,0.6);
+  max-width:440px;width:90%;
+}
+.game-title{
+  font-family:'Noto Serif KR',serif;font-size:3.2rem;font-weight:900;
+  color:#dca850;text-shadow:0 2px 20px rgba(220,168,80,0.5);letter-spacing:.6rem;
+}
+.game-subtitle{font-family:'Noto Serif KR',serif;color:#7a5020;font-size:.95rem;letter-spacing:.4rem;margin-top:-.8rem;}
+.start-divider{width:60%;height:1px;background:linear-gradient(to right,transparent,#6b4318,transparent);}
+.diff-label{font-size:.85rem;color:#b08040;letter-spacing:.1rem;}
+.diff-buttons{display:flex;gap:.8rem;flex-wrap:wrap;justify-content:center;}
+.diff-btn{
+  padding:.6rem 1.4rem;border:1px solid #6b4318;border-radius:9px;
+  background:rgba(0,0,0,0.35);font-family:'Noto Sans KR',sans-serif;font-size:.92rem;
+  cursor:pointer;transition:all .2s;
+}
+.diff-btn.easy{color:#7ecf7e;border-color:#4a7a4a;}
+.diff-btn.easy:hover{background:rgba(100,180,100,0.12);border-color:#7ecf7e;box-shadow:0 0 14px rgba(100,200,100,0.2);}
+.diff-btn.medium{color:#f5deb3;border-color:#7a5830;}
+.diff-btn.medium:hover{background:rgba(220,168,80,0.12);border-color:#dca850;box-shadow:0 0 14px rgba(220,168,80,0.2);}
+.diff-btn.hard{color:#cf8080;border-color:#7a4040;}
+.diff-btn.hard:hover{background:rgba(200,80,80,0.12);border-color:#cf8080;box-shadow:0 0 14px rgba(200,80,80,0.2);}
+.diff-btn.expert{color:#d070ff;border-color:#703090;}
+.diff-btn.expert:hover{background:rgba(160,60,220,0.12);border-color:#d070ff;box-shadow:0 0 14px rgba(180,60,240,0.25);}
+.renju-note{
+  font-size:.75rem;color:#6a4020;text-align:center;line-height:1.7;
+  border:1px solid #3a2010;border-radius:8px;padding:.6rem .9rem;background:rgba(0,0,0,0.2);
+}
+.renju-note strong{color:#a06030;}
+#gameScreen{
+  display:none;flex-direction:column;align-items:center;gap:.8rem;
+  padding:1rem .75rem;width:100%;max-width:680px;
+}
+.game-header{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+  padding:.6rem 1rem;background:rgba(20,10,5,0.85);
+  border:1px solid #4a2e10;border-radius:10px;gap:.5rem;flex-wrap:wrap;
+}
+.player-info{display:flex;align-items:center;gap:.6rem;flex:1;}
+.stone-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.5);}
+.stone-dot.black{background:radial-gradient(circle at 35% 35%,#555,#000);}
+.stone-dot.white{background:radial-gradient(circle at 35% 35%,#fff,#bbb);border:1px solid #999;}
+.status-text{font-size:.88rem;font-weight:500;color:#e8cc90;}
+.header-right{display:flex;align-items:center;gap:.7rem;}
+.diff-badge{font-size:.73rem;padding:.18rem .6rem;border:1px solid #4a2e10;border-radius:20px;color:#8a6030;white-space:nowrap;}
+.thinking-wrap{display:none;align-items:center;gap:.35rem;font-size:.78rem;color:#b08040;}
+.dots span{display:inline-block;width:5px;height:5px;border-radius:50%;background:#b08040;animation:blink 1.2s infinite;}
+.dots span:nth-child(2){animation-delay:.2s;}
+.dots span:nth-child(3){animation-delay:.4s;}
+@keyframes blink{0%,80%,100%{opacity:.25;}40%{opacity:1;}}
+canvas#board{display:block;border-radius:6px;cursor:pointer;max-width:100%;}
+.game-footer{display:flex;gap:.75rem;}
+.btn{
+  padding:.5rem 1.2rem;border:1px solid #5a3818;border-radius:8px;
+  background:rgba(0,0,0,0.4);font-family:'Noto Sans KR',sans-serif;
+  font-size:.83rem;color:#d4b880;cursor:pointer;transition:all .18s;
+}
+.btn:hover{background:rgba(180,120,40,0.15);border-color:#a07030;}
+#overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);
+  align-items:center;justify-content:center;z-index:200;
+}
+.result-card{
+  background:rgba(18,10,4,0.97);border:2px solid #7a5020;border-radius:18px;
+  padding:2.5rem 3rem;text-align:center;
+  box-shadow:0 0 60px rgba(200,140,50,0.25),0 20px 60px rgba(0,0,0,0.7);
+  display:flex;flex-direction:column;align-items:center;gap:1.3rem;
+  max-width:320px;width:88%;
+}
+.result-emoji{font-size:3.2rem;line-height:1;}
+.result-title{font-family:'Noto Serif KR',serif;font-size:1.9rem;font-weight:700;color:#dca850;}
+.result-sub{color:#9a7040;font-size:.88rem;}
+.play-again-btn{
+  padding:.75rem 2.2rem;background:linear-gradient(135deg,#7a4a18,#c8902c);
+  border:none;border-radius:9px;color:#fff8ec;font-family:'Noto Sans KR',sans-serif;
+  font-size:1rem;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 18px rgba(180,120,40,0.35);transition:all .2s;
+}
+.play-again-btn:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(200,140,50,0.5);}
+@media(max-width:480px){.game-title{font-size:2.4rem;}.result-card{padding:2rem 1.8rem;}}
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+  <h1 class="game-title">오목</h1>
+  <p class="game-subtitle">五目並べ · 렌주룰</p>
+  <div class="start-divider"></div>
+  <p class="diff-label">난이도를 선택하세요</p>
+  <div class="diff-buttons">
+    <button class="diff-btn easy"   onclick="startGame('easy')">쉬움</button>
+    <button class="diff-btn medium" onclick="startGame('medium')">보통</button>
+    <button class="diff-btn hard"   onclick="startGame('hard')">어려움</button>
+    <button class="diff-btn expert" onclick="startGame('expert')">전문가</button>
+  </div>
+  <div class="renju-note">
+    <strong>렌주룰 (흑 금수)</strong><br>
+    흑은 삼삼·사사·장목(6목↑) 금지<br>
+    ✕ 표시 위치에는 흑돌을 놓을 수 없습니다
+  </div>
+</div>
+
+<div id="gameScreen">
+  <div class="game-header">
+    <div class="player-info">
+      <div class="stone-dot" id="turnDot"></div>
+      <span class="status-text" id="statusText">로딩 중...</span>
+    </div>
+    <div class="header-right">
+      <div class="thinking-wrap" id="thinkWrap">
+        AI 생각 중
+        <div class="dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="diff-badge" id="diffBadge">보통</div>
+    </div>
+  </div>
+  <canvas id="board"></canvas>
+  <div class="game-footer">
+    <button class="btn" onclick="showStart()">← 메뉴</button>
+    <button class="btn" onclick="newGame()">다시 시작</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="result-card">
+    <div class="result-emoji" id="resEmoji">🏆</div>
+    <div class="result-title"  id="resTitle">승리!</div>
+    <div class="result-sub"    id="resSub">5목을 완성했습니다!</div>
+    <button class="play-again-btn" onclick="newGame()">다시 하기</button>
+    <button class="btn" style="border-color:#3a2010;font-size:.82rem;" onclick="showStart()">난이도 변경</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── CONSTANTS ──
+const N = 19;
+const CENTER = Math.floor(N / 2); // 9
+const EMPTY=0, BLACK=1, WHITE=2;
+
+const S={
+  WIN:    100000000,
+  OPEN4:    2000000,
+  CLOSE4:   1000000,
+  OPEN3:     100000,
+  CLOSE3:     10000,
+  OPEN2:       1000,
+  CLOSE2:       100,
+};
+
+const CFG={
+  easy:  {depth:1, cands:10, noise:.30},
+  medium:{depth:2, cands:15, noise:0},
+  hard:  {depth:3, cands:20, noise:0},
+  expert:{depth:4, cands:15, noise:0},
+};
+const DNAME={easy:'쉬움',medium:'보통',hard:'어려움',expert:'전문가'};
+
+// ── STATE ──
+let board, turn, aiCol, humCol, over, lastMove, winLine, diff, aiBusy;
+let forbiddenSet = new Set(); // encoded r*N+c, forbidden cells for black's turn
+let flashMsg = '', flashTimer = null;
+
+// ── CANVAS ──
+let canvas, ctx, cs, mg;
+const cx = c => mg + c * cs;
+const cy = r => mg + r * cs;
+
+function initCanvas() {
+  canvas = document.getElementById('board');
+  ctx = canvas.getContext('2d');
+  canvas.addEventListener('click', onTap);
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    onTap({clientX: t.clientX, clientY: t.clientY});
+  }, {passive: false});
+  window.addEventListener('resize', () => { resize(); render(); });
+}
+
+function resize() {
+  const maxW = window.innerWidth - 32;
+  const maxH = window.innerHeight - 200;
+  const maxS = Math.min(maxW, maxH, 600);
+  cs = Math.max(Math.floor(maxS / (N + 1)), 18);
+  mg = cs;
+  const sz = cs * (N - 1) + mg * 2;
+  canvas.width = sz;
+  canvas.height = sz;
+}
+
+function render() {
+  if (!ctx) return;
+  const sz = canvas.width;
+
+  // Board background
+  const bg = ctx.createLinearGradient(0, 0, sz, sz);
+  bg.addColorStop(0, '#EEC060');
+  bg.addColorStop(.5, '#DCA850');
+  bg.addColorStop(1, '#C89040');
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0, 0, sz, sz, 6);
+  else ctx.rect(0, 0, sz, sz);
+  ctx.fill();
+
+  // Wood grain
+  ctx.save(); ctx.globalAlpha = .03;
+  for (let y = -sz; y < sz * 2; y += 9) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(sz, y + 18);
+    ctx.strokeStyle = '#5A3800'; ctx.lineWidth = 2; ctx.stroke();
+  }
+  ctx.restore();
+
+  // Grid lines
+  ctx.strokeStyle = '#8B5A00'; ctx.lineWidth = .8;
+  for (let i = 0; i < N; i++) {
+    ctx.beginPath(); ctx.moveTo(cx(i), cy(0)); ctx.lineTo(cx(i), cy(N-1)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx(0), cy(i)); ctx.lineTo(cx(N-1), cy(i)); ctx.stroke();
+  }
+  ctx.lineWidth = 1.6;
+  ctx.strokeRect(cx(0), cy(0), cs * (N-1), cs * (N-1));
+
+  // Hoshi (star points) — 19×19: corners/edges/center at 3,9,15
+  ctx.fillStyle = '#5A3800';
+  for (const r of [3, 9, 15]) for (const c of [3, 9, 15]) {
+    ctx.beginPath();
+    ctx.arc(cx(c), cy(r), Math.max(cs * .09, 2.5), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Win line
+  if (winLine && winLine.length >= 2) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,50,50,.65)';
+    ctx.lineWidth = cs * .22; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx(winLine[0][1]), cy(winLine[0][0]));
+    for (const [r, c] of winLine) ctx.lineTo(cx(c), cy(r));
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Forbidden cell markers (✕) — shown when it's black's turn
+  if (turn === BLACK && !over) {
+    for (const k of forbiddenSet) {
+      const r = Math.floor(k / N), c = k % N;
+      drawX(r, c);
+    }
+  }
+
+  // Stones
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++)
+    if (board[r][c] !== EMPTY) drawStone(r, c, board[r][c]);
+
+  // Last move dot
+  if (lastMove) {
+    const [lr, lc] = lastMove;
+    const x = cx(lc), y = cy(lr);
+    const dr = Math.max(cs * .13, 3.5);
+    ctx.beginPath(); ctx.arc(x, y, dr, 0, Math.PI * 2);
+    ctx.fillStyle = board[lr][lc] === BLACK ? 'rgba(255,255,255,.85)' : 'rgba(0,0,0,.65)';
+    ctx.fill();
+  }
+
+  // Flash message (금수!)
+  if (flashMsg) {
+    ctx.save();
+    ctx.font = `bold ${Math.max(cs * 1.1, 22)}px 'Noto Sans KR', sans-serif`;
+    ctx.fillStyle = 'rgba(220,40,40,.92)';
+    ctx.strokeStyle = 'rgba(255,255,255,.7)';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(flashMsg, sz / 2, sz / 2);
+    ctx.fillText(flashMsg, sz / 2, sz / 2);
+    ctx.restore();
+  }
+}
+
+function drawX(r, c) {
+  const x = cx(c), y = cy(r), s = Math.max(cs * .19, 4);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(210,50,50,.55)';
+  ctx.lineWidth = Math.max(cs * .08, 1.2);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y + s);
+  ctx.moveTo(x + s, y - s); ctx.lineTo(x - s, y + s);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawStone(r, c, col) {
+  const x = cx(c), y = cy(r), rad = cs * .44;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.55)';
+  ctx.shadowBlur = rad * .7;
+  ctx.shadowOffsetX = rad * .1; ctx.shadowOffsetY = rad * .15;
+  ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
+  if (col === BLACK) {
+    const g = ctx.createRadialGradient(x-rad*.3, y-rad*.3, 0, x, y, rad);
+    g.addColorStop(0, '#505050'); g.addColorStop(.5, '#181818'); g.addColorStop(1, '#000');
+    ctx.fillStyle = g;
+  } else {
+    const g = ctx.createRadialGradient(x-rad*.3, y-rad*.3, 0, x, y, rad);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(.6, '#e8e8e8'); g.addColorStop(1, '#aaaaaa');
+    ctx.fillStyle = g;
+  }
+  ctx.fill(); ctx.restore();
+  const sg = ctx.createRadialGradient(x-rad*.42, y-rad*.46, 0, x-rad*.1, y-rad*.1, rad*.78);
+  sg.addColorStop(0, col === BLACK ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.88)');
+  sg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
+  ctx.fillStyle = sg; ctx.fill();
+}
+
+// ── GAME ──
+function startGame(d) {
+  diff = d;
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('gameScreen').style.display = 'flex';
+  document.getElementById('diffBadge').textContent = DNAME[d];
+  if (!canvas) initCanvas();
+  resize();
+  newGame();
+}
+
+function newGame() {
+  board = Array.from({length: N}, () => new Array(N).fill(EMPTY));
+  over = false; lastMove = null; winLine = null; aiBusy = false;
+  forbiddenSet.clear();
+  clearFlash();
+  if (Math.random() < .5) { humCol = BLACK; aiCol = WHITE; }
+  else { humCol = WHITE; aiCol = BLACK; }
+  turn = BLACK;
+  hideOverlay();
+  updateForbidden();
+  updateStatus();
+  render();
+  if (aiCol === BLACK) scheduleAI();
+}
+
+function showStart() {
+  hideOverlay();
+  document.getElementById('gameScreen').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+}
+
+function onTap(e) {
+  if (over || aiBusy || turn !== humCol) return;
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+  const px = (e.clientX - rect.left) * sx, py = (e.clientY - rect.top) * sy;
+  const c = Math.round((px - mg) / cs), r = Math.round((py - mg) / cs);
+  if (r < 0 || r >= N || c < 0 || c >= N || board[r][c] !== EMPTY) return;
+
+  // Renju: check forbidden for black
+  if (turn === BLACK && forbiddenSet.has(r * N + c)) {
+    showFlash('금수!');
+    return;
+  }
+
+  place(r, c, humCol);
+  render();
+  const wl = checkWin(r, c);
+  if (wl) { endGame(wl, true); return; }
+  if (full()) { endGame(null, null); return; }
+  turn = aiCol;
+  updateForbidden();
+  updateStatus();
+  scheduleAI();
+}
+
+function place(r, c, col) { board[r][c] = col; lastMove = [r, c]; }
+
+function full() {
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (board[r][c] === EMPTY) return false;
+  return true;
+}
+
+// Win check respecting Renju: black needs exactly 5; white needs 5+
+function checkWin(r, c) {
+  const col = board[r][c];
+  if (col === EMPTY) return null;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    const line = [[r, c]];
+    for (let d = 1; d <= 9; d++) {
+      const nr = r+dr*d, nc = c+dc*d;
+      if (nr<0||nr>=N||nc<0||nc>=N||board[nr][nc]!==col) break;
+      line.push([nr, nc]);
+    }
+    for (let d = 1; d <= 9; d++) {
+      const nr = r-dr*d, nc = c-dc*d;
+      if (nr<0||nr>=N||nc<0||nc>=N||board[nr][nc]!==col) break;
+      line.push([nr, nc]);
+    }
+    // Black wins only with exactly 5; white wins with 5+
+    if (col === BLACK && line.length === 5) return line;
+    if (col === WHITE && line.length >= 5) return line.slice(0, 5);
+  }
+  return null;
+}
+
+function endGame(wl, humanWon) {
+  winLine = wl; over = true; render();
+  setTimeout(() => showResult(humanWon), 450);
+}
+
+function scheduleAI() {
+  aiBusy = true; updateStatus();
+  const base = diff === 'expert' ? 350 : 200;
+  setTimeout(doAI, base + Math.random() * 200);
+}
+
+function doAI() {
+  if (over) return;
+  const [r, c] = getBest();
+  place(r, c, aiCol);
+  aiBusy = false; turn = humCol;
+  render();
+  const wl = checkWin(r, c);
+  if (wl) { endGame(wl, false); return; }
+  if (full()) { endGame(null, null); return; }
+  updateForbidden();
+  updateStatus();
+}
+
+// ── STATUS UI ──
+function updateStatus() {
+  const dot = document.getElementById('turnDot');
+  const txt = document.getElementById('statusText');
+  const tw = document.getElementById('thinkWrap');
+  if (over) return;
+  if (aiBusy) {
+    tw.style.display = 'flex';
+    txt.textContent = ''; dot.className = 'stone-dot'; dot.style.display = 'none';
+  } else {
+    tw.style.display = 'none'; dot.style.display = '';
+    dot.className = 'stone-dot ' + (turn === BLACK ? 'black' : 'white');
+    const cname = turn === BLACK ? '흑' : '백';
+    txt.textContent = turn === humCol ? `당신 (${cname}) 차례` : `AI (${cname}) 차례`;
+  }
+}
+
+function showResult(humanWon) {
+  document.getElementById('overlay').style.display = 'flex';
+  const e = document.getElementById('resEmoji');
+  const t = document.getElementById('resTitle');
+  const s = document.getElementById('resSub');
+  if (humanWon === null) { e.textContent='🤝'; t.textContent='무승부!'; s.textContent='바둑판이 가득 찼습니다'; }
+  else if (humanWon)     { e.textContent='🏆'; t.textContent='승리!';   s.textContent='5목을 완성했습니다!'; }
+  else                   { e.textContent='😔'; t.textContent='패배...'; s.textContent='AI가 5목을 완성했습니다'; }
+}
+function hideOverlay() { document.getElementById('overlay').style.display = 'none'; }
+
+function showFlash(msg) {
+  flashMsg = msg;
+  render();
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(clearFlash, 700);
+}
+function clearFlash() { flashMsg = ''; render(); }
+
+// ── RENJU FORBIDDEN MOVE LOGIC ──
+// All functions that inspect the board accept board array `b` as first param.
+// isForbidden assumes b[r][c] is EMPTY and temporarily places BLACK there.
+// Only BLACK is subject to forbidden rules.
+
+function runLen(b, r, c, dr, dc) {
+  const col = b[r][c];
+  let len = 1;
+  for (let d = 1; d < N; d++) {
+    const nr=r+dr*d, nc=c+dc*d;
+    if (nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col) break;
+    len++;
+  }
+  for (let d = 1; d < N; d++) {
+    const nr=r-dr*d, nc=c-dc*d;
+    if (nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col) break;
+    len++;
+  }
+  return len;
+}
+
+// Count distinct directions that contain a "four" pattern (4 blacks + 1 empty in a window of 5)
+function countFours(b, r, c) {
+  let cnt = 0;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr,dc] of dirs) {
+    let found = false;
+    for (let k = 0; k <= 4 && !found; k++) {
+      const sr=r-k*dr, sc=c-k*dc;
+      let blacks=0, empties=0, valid=true;
+      for (let i = 0; i < 5; i++) {
+        const nr=sr+i*dr, nc=sc+i*dc;
+        if (nr<0||nr>=N||nc<0||nc>=N) { valid=false; break; }
+        const v = b[nr][nc];
+        if (v===BLACK) blacks++;
+        else if (v===EMPTY) empties++;
+        else { valid=false; break; }
+      }
+      if (valid && blacks===4 && empties===1) found=true;
+    }
+    if (found) cnt++;
+  }
+  return cnt;
+}
+
+// Count distinct directions that contain an "open three" (3 blacks + 3 empties in a window of 6
+// that can become an open four _XXXX_ by filling one empty)
+function countOpenThrees(b, r, c) {
+  let cnt = 0;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr,dc] of dirs) {
+    let found = false;
+    for (let k = 0; k <= 5 && !found; k++) {
+      const sr=r-k*dr, sc=c-k*dc;
+      const cells = []; let valid = true;
+      for (let i = 0; i < 6; i++) {
+        const nr=sr+i*dr, nc=sc+i*dc;
+        if (nr<0||nr>=N||nc<0||nc>=N) { valid=false; break; }
+        cells.push(b[nr][nc]);
+      }
+      if (!valid) continue;
+      let blacks=0, empties=0, hasOpp=false;
+      for (const v of cells) {
+        if (v===BLACK) blacks++;
+        else if (v===EMPTY) empties++;
+        else { hasOpp=true; break; }
+      }
+      if (hasOpp || blacks!==3 || empties!==3) continue;
+      // Check if any empty cell, when filled with BLACK, creates _XXXX_
+      for (let i = 0; i < 6 && !found; i++) {
+        if (cells[i] !== EMPTY) continue;
+        const t = cells.slice(); t[i] = BLACK;
+        if (t[0]===EMPTY && t[1]===BLACK && t[2]===BLACK && t[3]===BLACK && t[4]===BLACK && t[5]===EMPTY)
+          found = true;
+      }
+    }
+    if (found) cnt++;
+  }
+  return cnt;
+}
+
+// b[r][c] must already be BLACK when this is called
+function isForbiddenPlaced(b, r, c) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  // Exact five = win → never forbidden
+  for (const [dr,dc] of dirs) if (runLen(b,r,c,dr,dc)===5) return false;
+  // Overline (6+)
+  for (const [dr,dc] of dirs) if (runLen(b,r,c,dr,dc)>=6) return true;
+  // 4-4
+  if (countFours(b,r,c) >= 2) return true;
+  // 3-3
+  if (countOpenThrees(b,r,c) >= 2) return true;
+  return false;
+}
+
+// Safe wrapper: temporarily places BLACK, checks, then restores
+function isForbidden(b, r, c) {
+  b[r][c] = BLACK;
+  const f = isForbiddenPlaced(b, r, c);
+  b[r][c] = EMPTY;
+  return f;
+}
+
+// Recompute forbidden cells for current turn; only meaningful when turn===BLACK
+function updateForbidden() {
+  forbiddenSet.clear();
+  if (turn !== BLACK || over) return;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (board[r][c] !== EMPTY) continue;
+    if (isForbidden(board, r, c)) forbiddenSet.add(r * N + c);
+  }
+}
+
+// ── AI ──
+
+// Win check for a just-placed stone; respects Renju (black needs exactly 5)
+function winFast(b, r, c) {
+  const col = b[r][c];
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr,dc] of dirs) {
+    let n = 1;
+    for (let d=1;d<=9;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
+    for (let d=1;d<=9;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==col)break;n++;}
+    if (col===BLACK ? n===5 : n>=5) return true;
+  }
+  return false;
+}
+
+function evalBoard(b, ai, hu) {
+  let sc = 0;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+    const col=b[r][c]; if(col===EMPTY) continue;
+    for (const [dr,dc] of dirs) {
+      const pr=r-dr, pc=c-dc;
+      if (pr>=0&&pr<N&&pc>=0&&pc<N&&b[pr][pc]===col) continue;
+      let len=0, nr=r, nc=c;
+      while (nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===col){len++;nr+=dr;nc+=dc;}
+      const op=(pr>=0&&pr<N&&pc>=0&&pc<N&&b[pr][pc]===EMPTY)?1:0;
+      const on=(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]===EMPTY)?1:0;
+      const oe=op+on;
+      let ps=0;
+      if(len>=5)ps=S.WIN;
+      else if(len===4)ps=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;
+      else if(len===3)ps=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;
+      else if(len===2)ps=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
+      sc += col===ai ? ps : -ps*1.05;
+    }
+  }
+  return sc;
+}
+
+function cellThreat(b, r, c, col) {
+  b[r][c] = col;
+  let sc = 0;
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr,dc] of dirs) {
+    let len=1, fwd=0, bwd=0;
+    for(let d=1;d<=4;d++){const nr=r+dr*d,nc=c+dc*d;if(nr<0||nr>=N||nc<0||nc>=N)break;if(b[nr][nc]===col)len++;else{if(b[nr][nc]===EMPTY)fwd=1;break;}}
+    for(let d=1;d<=4;d++){const nr=r-dr*d,nc=c-dc*d;if(nr<0||nr>=N||nc<0||nc>=N)break;if(b[nr][nc]===col)len++;else{if(b[nr][nc]===EMPTY)bwd=1;break;}}
+    const oe=fwd+bwd;
+    if(len>=5)sc+=S.WIN;
+    else if(len===4)sc+=oe>=2?S.OPEN4:oe===1?S.CLOSE4:0;
+    else if(len===3)sc+=oe>=2?S.OPEN3:oe===1?S.CLOSE3:0;
+    else if(len===2)sc+=oe>=2?S.OPEN2:oe===1?S.CLOSE2:0;
+  }
+  b[r][c] = EMPTY;
+  return sc;
+}
+
+function quickSc(b, r, c) {
+  let s=0;
+  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+    if(!dr&&!dc)continue;
+    const nr=r+dr,nc=c+dc;
+    if(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]!==EMPTY)s++;
+  }
+  return s;
+}
+
+// Filter candidate move list: remove cells forbidden for BLACK
+function filterForbidden(b, moves) {
+  return moves.filter(([r,c]) => !isForbidden(b, r, c));
+}
+
+function cands(b, maxN) {
+  const seen = new Set(), res = [];
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+    if (b[r][c]===EMPTY) continue;
+    for (let dr=-2;dr<=2;dr++) for (let dc=-2;dc<=2;dc++) {
+      const nr=r+dr, nc=c+dc;
+      if (nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==EMPTY) continue;
+      const k=nr*N+nc; if (!seen.has(k)) { seen.add(k); res.push([nr,nc]); }
+    }
+  }
+  if (!res.length) return [[CENTER, CENTER]];
+  if (diff==='hard'||diff==='expert') {
+    res.sort((p,q) => {
+      const sp=cellThreat(b,p[0],p[1],aiCol)+cellThreat(b,p[0],p[1],humCol);
+      const sq=cellThreat(b,q[0],q[1],aiCol)+cellThreat(b,q[0],q[1],humCol);
+      return sq-sp;
+    });
+  } else {
+    res.sort((p,q) => quickSc(b,q[0],q[1]) - quickSc(b,p[0],p[1]));
+  }
+  return maxN && res.length > maxN ? res.slice(0, maxN) : res;
+}
+
+function orderMoves(b, mv, cur, opp) {
+  const wins=[], blocks=[], rest=[];
+  for (const [r,c] of mv) {
+    b[r][c]=cur; if(winFast(b,r,c)){b[r][c]=EMPTY;wins.push([r,c]);continue;} b[r][c]=EMPTY;
+    b[r][c]=opp; if(winFast(b,r,c)){b[r][c]=EMPTY;blocks.push([r,c]);continue;} b[r][c]=EMPTY;
+    rest.push([r,c]);
+  }
+  return [...wins,...blocks,...rest];
+}
+
+function mm(b, depth, alpha, beta, isMax, ai, hu, lr, lc, maxC) {
+  if (lr !== undefined && winFast(b,lr,lc)) {
+    const w=b[lr][lc]; return w===ai ? S.WIN+depth : -(S.WIN+depth);
+  }
+  if (depth===0) return evalBoard(b,ai,hu);
+
+  let mv = cands(b, maxC);
+  const cur = isMax ? ai : hu;
+  const opp = isMax ? hu : ai;
+
+  // Apply forbidden filter for black
+  if (cur === BLACK) {
+    mv = filterForbidden(b, mv);
+    if (!mv.length) return isMax ? -(S.WIN) : S.WIN; // no legal moves = bad
+  }
+
+  const ord = orderMoves(b, mv, cur, opp);
+  if (!ord.length) return 0;
+
+  if (isMax) {
+    let val = -Infinity;
+    for (const [r,c] of ord) {
+      b[r][c]=cur;
+      val=Math.max(val, mm(b,depth-1,alpha,beta,false,ai,hu,r,c,maxC));
+      b[r][c]=EMPTY;
+      alpha=Math.max(alpha,val);
+      if (alpha>=beta) break;
+    }
+    return val;
+  } else {
+    let val = Infinity;
+    for (const [r,c] of ord) {
+      b[r][c]=cur;
+      val=Math.min(val, mm(b,depth-1,alpha,beta,true,ai,hu,r,c,maxC));
+      b[r][c]=EMPTY;
+      beta=Math.min(beta,val);
+      if (alpha>=beta) break;
+    }
+    return val;
+  }
+}
+
+function getBest() {
+  const {depth, cands:maxC, noise} = CFG[diff];
+  let mv = cands(board, maxC);
+
+  // Apply forbidden filter when AI plays black
+  if (aiCol === BLACK) {
+    mv = filterForbidden(board, mv);
+    if (!mv.length) return [CENTER, CENTER];
+  }
+
+  // Immediate win
+  for (const [r,c] of mv) {
+    board[r][c]=aiCol;
+    if (winFast(board,r,c)) { board[r][c]=EMPTY; return [r,c]; }
+    board[r][c]=EMPTY;
+  }
+  // Immediate block
+  for (const [r,c] of mv) {
+    board[r][c]=humCol;
+    if (winFast(board,r,c)) {
+      board[r][c]=EMPTY;
+      if (diff==='easy' && Math.random()<noise) continue;
+      return [r,c];
+    }
+    board[r][c]=EMPTY;
+  }
+  // Random for easy
+  if (diff==='easy' && Math.random()<noise*.6)
+    return mv[Math.floor(Math.random()*Math.min(mv.length,5))];
+
+  const ord = orderMoves(board, mv, aiCol, humCol);
+  let best=-Infinity, bestM=ord[0]||mv[0];
+  for (const [r,c] of ord) {
+    board[r][c]=aiCol;
+    let sc=mm(board,depth-1,-Infinity,Infinity,false,aiCol,humCol,r,c,maxC);
+    board[r][c]=EMPTY;
+    if (diff==='easy') sc += (Math.random()-.5)*S.OPEN3*.8;
+    if (sc>best) { best=sc; bestM=[r,c]; }
+  }
+  return bestM;
+}
+</script>
+</body>
+</html>
