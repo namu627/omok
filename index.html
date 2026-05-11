@@ -316,23 +316,36 @@ function drawStone(r,c,col){
   ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.fillStyle=sg; ctx.fill();
 }
 
-// ── PRACTICE MODE HINTS ──
+// ── PRACTICE MODE HINTS (async, backed by God AI Minimax) ──
+function ensureGodWorker(){
+  if(!godWorker){
+    const blob=new Blob([GOD_WORKER_SRC],{type:'application/javascript'});
+    godWorker=new Worker(URL.createObjectURL(blob));
+    godWorker.onmessage=e=>{
+      if(e.data.hints){if(practiceMode&&!over)applyHints(e.data.hints);return;}
+      if(!aiBusy||over)return;
+      finishAITurn(e.data.move[0],e.data.move[1]);
+    };
+    godWorker.onerror=()=>{if(aiBusy)finishAITurn(...getBest());};
+  }
+}
+function applyHints(hints){
+  if(!hints||!hints.length){practiceHints=[];render();return;}
+  const top=hints.slice(0,3);
+  const scores=top.map(h=>h.score);
+  const maxS=Math.max(...scores);
+  const SCALE=1e6;
+  const exps=scores.map(s=>Math.exp((s-maxS)/SCALE));
+  const sum=exps.reduce((a,b)=>a+b,0);
+  let pcts=exps.map(e=>Math.round(e/sum*100));
+  pcts[0]+=100-pcts.reduce((a,b)=>a+b,0);
+  practiceHints=top.map((h,i)=>({r:h.r,c:h.c,pct:pcts[i]}));
+  render();
+}
 function getTop3Hints(){
   if(!practiceMode||over||turn!==humCol){practiceHints=[];return;}
-  let mv=cands(board,25);
-  if(humCol===BLACK)mv=filterForbidden(board,mv);
-  if(!mv.length){practiceHints=[];return;}
-  const scored=mv.map(([r,c])=>{
-    board[r][c]=humCol;const win=winFast(board,r,c);board[r][c]=EMPTY;
-    if(win)return{r,c,score:S.WIN};
-    board[r][c]=aiCol;const aiWin=winFast(board,r,c);board[r][c]=EMPTY;
-    if(aiWin)return{r,c,score:S.WIN*.95};
-    return{r,c,score:cellThreat(board,r,c,humCol)+cellThreat(board,r,c,aiCol)*.85};
-  });
-  scored.sort((a,b)=>b.score-a.score);
-  const top3=scored.slice(0,3);
-  const total=top3.reduce((s,x)=>s+Math.max(x.score,1),0);
-  practiceHints=top3.map(x=>({r:x.r,c:x.c,pct:Math.round(Math.max(x.score,1)/total*100)}));
+  ensureGodWorker();
+  godWorker.postMessage({board:board.map(r=>[...r]),aiCol:humCol,humCol:aiCol,getHints:true});
 }
 
 // ── GAME ──
@@ -602,15 +615,7 @@ function getBest(){
 function destroyGodWorker(){if(godWorker){godWorker.terminate();godWorker=null;}}
 
 function doGodAI(){
-  if(!godWorker){
-    const blob=new Blob([GOD_WORKER_SRC],{type:'application/javascript'});
-    godWorker=new Worker(URL.createObjectURL(blob));
-    godWorker.onmessage=e=>{
-      if(!aiBusy||over)return;
-      finishAITurn(e.data.move[0],e.data.move[1]);
-    };
-    godWorker.onerror=()=>finishAITurn(...getBest());
-  }
+  ensureGodWorker();
   godWorker.postMessage({board:board.map(r=>[...r]),aiCol,humCol});
 }
 
@@ -829,10 +834,47 @@ function searchGod(board,ai,hu){
   return bestMove||mv[0]||[CENTER,CENTER];
 }
 
+function searchGodTop3(board,ai,hu){
+  startTime=Date.now();timeUp=false;
+  curHash=0;
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(board[r][c]!==EMPTY)hToggle(r,c,board[r][c]);
+  tt_h.fill(0x7fffffff);
+  const MAX_C=15;
+  let mv=cands(board,MAX_C);
+  if(ai===BLACK)mv=mv.filter(([r,c])=>!iForbid(board,r,c));
+  if(!mv.length)return[{r:CENTER,c:CENTER,score:0}];
+  let bestScores=mv.slice(0,3).map(([r,c])=>({r,c,score:0}));
+  for(let depth=1;depth<=8;depth++){
+    chkTime();if(timeUp)break;
+    mv=cands(board,MAX_C);
+    if(ai===BLACK)mv=mv.filter(([r,c])=>!iForbid(board,r,c));
+    if(!mv.length)break;
+    const tm=ttMove();
+    let ord=orderMoves(board,mv,ai,hu);
+    if(tm){const idx=ord.findIndex(([r,c])=>r===tm[0]&&c===tm[1]);if(idx>0){const m=ord.splice(idx,1)[0];ord.unshift(m);}}
+    let iterScores=[];let complete=true;let foundWin=false;
+    for(const[r,c]of ord){
+      chkTime();if(timeUp){complete=false;break;}
+      pS(board,r,c,ai);
+      const sc=mmGod(board,depth-1,-Infinity,Infinity,false,ai,hu,r,c,MAX_C);
+      rS(board,r,c,ai);
+      iterScores.push({r,c,score:sc});
+      if(sc>=S.WIN)foundWin=true;
+    }
+    if(complete){iterScores.sort((a,b)=>b.score-a.score);bestScores=iterScores;if(foundWin)break;}
+  }
+  return bestScores.slice(0,3);
+}
+
 self.onmessage=function(e){
   AI_COL=e.data.aiCol;HU_COL=e.data.humCol;
-  const move=searchGod(e.data.board,AI_COL,HU_COL);
-  self.postMessage({move});
+  if(e.data.getHints){
+    const hints=searchGodTop3(e.data.board,AI_COL,HU_COL);
+    self.postMessage({hints});
+  }else{
+    const move=searchGod(e.data.board,AI_COL,HU_COL);
+    self.postMessage({move});
+  }
 };
 `;
 </script>
