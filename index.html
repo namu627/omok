@@ -54,6 +54,9 @@ body{
   box-shadow:0 0 22px rgba(255,215,0,0.45),0 0 6px rgba(255,215,0,0.2);
   text-shadow:0 0 12px rgba(255,215,0,0.9);
 }
+.diff-btn.practice{color:#50d880;border-color:#305a40;}
+.diff-btn.practice:hover{background:rgba(50,190,80,0.13);border-color:#50d880;box-shadow:0 0 14px rgba(50,200,80,0.28);}
+.diff-badge.practice-badge{color:#40c870;border-color:#2a5a38;background:rgba(0,70,30,0.22);}
 .renju-note{
   font-size:.75rem;color:#6a4020;text-align:center;line-height:1.7;
   border:1px solid #3a2010;border-radius:8px;padding:.6rem .9rem;background:rgba(0,0,0,0.2);
@@ -128,6 +131,7 @@ canvas#board{display:block;border-radius:6px;cursor:pointer;max-width:100%;}
     <button class="diff-btn hard"   onclick="startGame('hard')">어려움</button>
     <button class="diff-btn expert" onclick="startGame('expert')">전문가</button>
     <button class="diff-btn god"    onclick="startGame('god')">신 ✦</button>
+    <button class="diff-btn practice" onclick="startGame('practice')">연습하기</button>
   </div>
   <div class="renju-note">
     <strong>렌주룰 (흑 금수)</strong><br>
@@ -199,6 +203,8 @@ let board, turn, aiCol, humCol, over, lastMove, winLine, diff, aiBusy;
 let forbiddenSet = new Set();
 let flashMsg = '', flashTimer = null;
 let godWorker = null;
+let practiceMode = false;
+let practiceHints = []; // [{r,c,pct}, ...]
 
 // ── CANVAS ──
 let canvas, ctx, cs, mg;
@@ -258,6 +264,24 @@ function render() {
   if (turn===BLACK && !over){
     for (const k of forbiddenSet){ const r=Math.floor(k/N),c=k%N; drawX(r,c); }
   }
+  if(practiceMode&&!over&&practiceHints.length>0&&turn===humCol){
+    const hFill=['rgba(0,190,70,0.58)','rgba(30,160,55,0.40)','rgba(70,155,70,0.25)'];
+    const hStroke=['rgba(0,230,90,0.9)','rgba(40,200,70,0.7)','rgba(70,180,70,0.55)'];
+    for(let i=0;i<practiceHints.length;i++){
+      const{r,c,pct}=practiceHints[i];
+      const x=cx(c),y=cy(r),rad=cs*.44;
+      ctx.save();
+      ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);
+      ctx.fillStyle=hFill[i];ctx.fill();
+      ctx.strokeStyle=hStroke[i];ctx.lineWidth=i===0?2:1.5;ctx.stroke();
+      ctx.font=`bold ${Math.max(Math.floor(cs*.26),8)}px 'Noto Sans KR',sans-serif`;
+      ctx.fillStyle=i===0?'rgba(255,255,255,.95)':'rgba(255,255,255,.82)';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=2;
+      ctx.fillText(pct+'%',x,y);
+      ctx.restore();
+    }
+  }
   for (let r=0;r<N;r++) for (let c=0;c<N;c++) if (board[r][c]!==EMPTY) drawStone(r,c,board[r][c]);
   if (lastMove){
     const[lr,lc]=lastMove; const x=cx(lc),y=cy(lr); const dr=Math.max(cs*.13,3.5);
@@ -292,14 +316,34 @@ function drawStone(r,c,col){
   ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.fillStyle=sg; ctx.fill();
 }
 
+// ── PRACTICE MODE HINTS ──
+function getTop3Hints(){
+  if(!practiceMode||over||turn!==humCol){practiceHints=[];return;}
+  let mv=cands(board,25);
+  if(humCol===BLACK)mv=filterForbidden(board,mv);
+  if(!mv.length){practiceHints=[];return;}
+  const scored=mv.map(([r,c])=>{
+    board[r][c]=humCol;const win=winFast(board,r,c);board[r][c]=EMPTY;
+    if(win)return{r,c,score:S.WIN};
+    board[r][c]=aiCol;const aiWin=winFast(board,r,c);board[r][c]=EMPTY;
+    if(aiWin)return{r,c,score:S.WIN*.95};
+    return{r,c,score:cellThreat(board,r,c,humCol)+cellThreat(board,r,c,aiCol)*.85};
+  });
+  scored.sort((a,b)=>b.score-a.score);
+  const top3=scored.slice(0,3);
+  const total=top3.reduce((s,x)=>s+Math.max(x.score,1),0);
+  practiceHints=top3.map(x=>({r:x.r,c:x.c,pct:Math.round(Math.max(x.score,1)/total*100)}));
+}
+
 // ── GAME ──
 function startGame(d){
-  diff=d;
+  practiceMode=(d==='practice');
+  diff=practiceMode?'god':d;
   document.getElementById('startScreen').style.display='none';
   document.getElementById('gameScreen').style.display='flex';
   const badge=document.getElementById('diffBadge');
-  badge.textContent=DNAME[d];
-  badge.className='diff-badge'+(d==='god'?' god-badge':'');
+  if(practiceMode){badge.textContent='연습 모드';badge.className='diff-badge practice-badge';}
+  else{badge.textContent=DNAME[d];badge.className='diff-badge'+(d==='god'?' god-badge':'');}
   if (!canvas) initCanvas();
   resize(); newGame();
 }
@@ -308,11 +352,12 @@ function newGame(){
   destroyGodWorker();
   board=Array.from({length:N},()=>new Array(N).fill(EMPTY));
   over=false; lastMove=null; winLine=null; aiBusy=false;
-  forbiddenSet.clear(); clearFlash();
+  forbiddenSet.clear(); clearFlash(); practiceHints=[];
   if (Math.random()<.5){humCol=BLACK;aiCol=WHITE;}else{humCol=WHITE;aiCol=BLACK;}
   turn=BLACK;
   hideOverlay(); updateForbidden(); updateStatus(); render();
-  if (aiCol===BLACK) scheduleAI();
+  if(aiCol===BLACK)scheduleAI();
+  else if(practiceMode){getTop3Hints();render();}
 }
 
 function showStart(){
@@ -330,6 +375,7 @@ function onTap(e){
   const c=Math.round((px-mg)/cs), r=Math.round((py-mg)/cs);
   if (r<0||r>=N||c<0||c>=N||board[r][c]!==EMPTY) return;
   if (turn===BLACK && forbiddenSet.has(r*N+c)){showFlash('금수!');return;}
+  practiceHints=[];
   place(r,c,humCol); render();
   const wl=checkWin(r,c); if(wl){endGame(wl,true);return;}
   if(full()){endGame(null,null);return;}
@@ -377,6 +423,7 @@ function finishAITurn(r,c){
   const wl=checkWin(r,c); if(wl){endGame(wl,false);return;}
   if(full()){endGame(null,null);return;}
   updateForbidden(); updateStatus();
+  if(practiceMode){getTop3Hints();render();}
 }
 
 // ── STATUS UI ──
