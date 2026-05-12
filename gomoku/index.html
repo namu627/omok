@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>오목</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700;900&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="startScreen">
+  <h1 class="game-title">오목</h1>
+  <p class="game-subtitle">五目並べ · 렌주룰</p>
+  <div class="start-divider"></div>
+  <p class="diff-label">난이도를 선택하세요</p>
+  <div class="diff-buttons">
+    <button class="diff-btn easy"     onclick="startGame('easy')">쉬움</button>
+    <button class="diff-btn medium"   onclick="startGame('medium')">보통</button>
+    <button class="diff-btn hard"     onclick="startGame('hard')">어려움</button>
+    <button class="diff-btn expert"   onclick="startGame('expert')">전문가</button>
+    <button class="diff-btn god"      onclick="startGame('god')">신 ✦</button>
+    <button class="diff-btn superGod" onclick="startGame('superGod')">절대신 ✦✦</button>
+    <button class="diff-btn practice" onclick="startGame('practice')">연습하기</button>
+  </div>
+  <div class="renju-note">
+    <strong>렌주룰 (흑 금수)</strong><br>
+    흑은 삼삼·사사·장목(6목↑) 금지 &nbsp;|&nbsp; ✕ 위치에 흑돌 불가<br>
+    <strong>신</strong> — 반복 심화 탐색 + 전치표 (최대 3초)<br>
+    <strong>절대신</strong> — 강화 평가 + 상위 12수 집중 탐색 (최대 3.2초)
+  </div>
+</div>
+
+<div id="gameScreen">
+  <div class="game-header">
+    <div class="player-info">
+      <div class="stone-dot" id="turnDot"></div>
+      <span class="status-text" id="statusText">로딩 중...</span>
+    </div>
+    <div class="header-right">
+      <div class="thinking-wrap" id="thinkWrap">
+        <span id="thinkLabel">AI 생각 중</span>
+        <div class="dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="diff-badge" id="diffBadge">보통</div>
+    </div>
+  </div>
+
+  <canvas id="board"></canvas>
+
+  <div class="game-footer">
+    <button class="btn" onclick="showStart()">← 메뉴</button>
+    <button class="btn" onclick="newGame()">다시 시작</button>
+    <button class="btn confirm-btn" id="confirmBtn" onclick="confirmMove()" style="display:none">착수 ✓</button>
+    <button class="btn cancel-btn"  id="cancelBtn"  onclick="cancelMove()"  style="display:none">취소</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="result-card">
+    <div class="result-emoji" id="resEmoji">🏆</div>
+    <div class="result-title"  id="resTitle">승리!</div>
+    <div class="result-sub"    id="resSub">5목을 완성했습니다!</div>
+    <button class="play-again-btn" onclick="newGame()">다시 하기</button>
+    <button class="btn" style="border-color:#3a2010;font-size:.82rem;" onclick="showStart()">난이도 변경</button>
+  </div>
+</div>
+
+<script type="module" src="js/game.js"></script>
+</body>
+</html>
