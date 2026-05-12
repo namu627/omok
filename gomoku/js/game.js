@@ -1,4 +1,4 @@
-import { N, EMPTY, BLACK, DNAME } from './constants.js';
+import { N, EMPTY, BLACK, WHITE, DNAME } from './constants.js';
 import { checkWin, computeForbiddenSet } from './rules.js';
 import { initCanvas, resize, render, getCanvasEl, pixelToCell } from './board.js';
 import { getBest, ensureGodWorker, destroyGodWorker, sendToGodWorker } from './ai.js';
@@ -238,6 +238,19 @@ window.addEventListener('resize', () => { resize(); if (board) render(getState()
 function _init() {
   initCanvas(onTap);
   resize();
+  const emptyState = {
+    board: Array.from({length: N}, () => new Array(N).fill(EMPTY)),
+    turn: BLACK,
+    over: false,
+    forbiddenSet: new Set(),
+    lastMove: null,
+    winLine: null,
+    practiceHints: [],
+    flashMsg: '',
+    humCol: BLACK,
+    pendingMove: null
+  };
+  render(emptyState);
 
   const diffs = ['easy', 'medium', 'hard', 'expert', 'god', 'superGod', 'practice'];
   for (const d of diffs) {
