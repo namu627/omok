@@ -37,8 +37,15 @@ body{
 .diff-btn.god:hover{background:rgba(255,215,0,0.1);border-color:#ffd700;box-shadow:0 0 22px rgba(255,215,0,0.45),0 0 6px rgba(255,215,0,0.2);text-shadow:0 0 12px rgba(255,215,0,0.9);}
 .diff-btn.superGod{color:#c0d8ff;border-color:#4870cc;text-shadow:0 0 8px rgba(150,190,255,0.5);background:rgba(10,18,50,0.55);}
 .diff-btn.superGod:hover{background:rgba(100,150,255,0.12);border-color:#90bcff;box-shadow:0 0 24px rgba(100,160,255,0.45),0 0 8px rgba(100,160,255,0.2);text-shadow:0 0 14px rgba(180,215,255,0.95);}
-.diff-btn.practice{color:#50d880;border-color:#305a40;}
-.diff-btn.practice:hover{background:rgba(50,190,80,0.13);border-color:#50d880;box-shadow:0 0 14px rgba(50,200,80,0.28);}
+.diff-btn.learn{color:#50d880;border-color:#305a40;}
+.diff-btn.learn:hover{background:rgba(50,190,80,0.13);border-color:#50d880;box-shadow:0 0 14px rgba(50,200,80,0.28);}
+
+.learn-submenu{
+  display:flex;flex-wrap:wrap;gap:.45rem;justify-content:center;
+  width:100%;padding:.5rem .4rem .2rem;
+  border-top:1px solid #2a4a30;margin-top:-.5rem;
+}
+.diff-btn.learn-sub{font-size:.82rem;padding:.45rem .95rem;}
 
 .renju-note{
   font-size:.75rem;color:#6a4020;text-align:center;line-height:1.8;
@@ -48,6 +55,16 @@ body{
 
 /* ── Game screen ── */
 #gameScreen{display:none;flex-direction:column;align-items:center;gap:.8rem;padding:1rem .75rem;width:100%;max-width:680px;}
+
+.game-topbar{
+  width:100%;display:flex;gap:.6rem;justify-content:flex-start;
+}
+.ctrl-btn{
+  padding:.4rem 1rem;border:1px solid #4a2e10;border-radius:8px;
+  background:rgba(0,0,0,0.35);font-family:'Noto Sans KR',sans-serif;
+  font-size:.8rem;color:#b08040;cursor:pointer;transition:all .18s;
+}
+.ctrl-btn:hover{background:rgba(180,120,40,0.15);border-color:#a07030;color:#d4b880;}
 .game-header{
   width:100%;display:flex;align-items:center;justify-content:space-between;
   padding:.6rem 1rem;background:rgba(20,10,5,0.85);
@@ -63,6 +80,7 @@ body{
 .diff-badge.god-badge{color:#c8a800;border-color:#6b5010;text-shadow:0 0 6px rgba(255,215,0,0.4);}
 .diff-badge.superGod-badge{color:#90b8ff;border-color:#3a5898;text-shadow:0 0 6px rgba(120,170,255,0.4);}
 .diff-badge.practice-badge{color:#40c870;border-color:#2a5a38;background:rgba(0,70,30,0.22);}
+.diff-badge.learn-badge{color:#40c870;border-color:#2a5a38;background:rgba(0,70,30,0.22);}
 
 .thinking-wrap{display:none;align-items:center;gap:.35rem;font-size:.78rem;color:#b08040;}
 .thinking-wrap.god-think{color:#c8a800;}
@@ -94,8 +112,19 @@ canvas#board{display:block;border-radius:6px;cursor:pointer;max-width:100%;}
   border-color:#ffd040;
   box-shadow:0 0 18px rgba(255,210,50,0.35);
 }
-.btn.cancel-btn{color:#e09090;border-color:#703030;}
-.btn.cancel-btn:hover{background:rgba(180,50,50,0.12);border-color:#c06060;}
+.btn.confirm-btn:disabled{
+  opacity:.38;cursor:not-allowed;
+  background:rgba(0,0,0,0.25);border-color:#4a3010;color:#a08040;
+  box-shadow:none;transform:none;
+}
+.btn.confirm-btn:disabled:hover{
+  background:rgba(0,0,0,0.25);border-color:#4a3010;box-shadow:none;
+}
+
+.btn.undo-btn{color:#80c8ff;border-color:#305870;}
+.btn.undo-btn:hover{background:rgba(60,140,220,0.13);border-color:#60a8e8;}
+.btn.undo-btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn.undo-btn:disabled:hover{background:transparent;border-color:#305870;}
 
 /* ── Overlay ── */
 #overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);align-items:center;justify-content:center;z-index:200;}

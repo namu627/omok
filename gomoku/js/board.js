@@ -35,7 +35,7 @@ export function resize() {
 
 export function render(state) {
   if (!ctx) return;
-  const { board, turn, over, forbiddenSet, lastMove, winLine, practiceHints, flashMsg, humCol, pendingMove } = state;
+  const { board, turn, over, forbiddenSet, lastMove, winLine, flashMsg, humCol, pendingMove } = state;
   const sz = canvas.width;
 
   const bg = ctx.createLinearGradient(0, 0, sz, sz);
@@ -81,25 +81,6 @@ export function render(state) {
     ctx.lineWidth = Math.max(cs * .07, 1.5);
     ctx.beginPath(); ctx.arc(cx(pc), cy(pr), cs * .44, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
-  }
-
-  if (practiceHints && practiceHints.length > 0 && !over && turn === humCol && !pendingMove) {
-    const hFill=['rgba(0,190,70,0.58)','rgba(30,160,55,0.40)','rgba(70,155,70,0.25)'];
-    const hStroke=['rgba(0,230,90,0.9)','rgba(40,200,70,0.7)','rgba(70,180,70,0.55)'];
-    for (let i=0;i<practiceHints.length;i++) {
-      const {r,c,pct} = practiceHints[i];
-      const x=cx(c),y=cy(r),rad=cs*.44;
-      ctx.save();
-      ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);
-      ctx.fillStyle=hFill[i];ctx.fill();
-      ctx.strokeStyle=hStroke[i];ctx.lineWidth=i===0?2:1.5;ctx.stroke();
-      ctx.font=`bold ${Math.max(Math.floor(cs*.26),8)}px 'Noto Sans KR',sans-serif`;
-      ctx.fillStyle=i===0?'rgba(255,255,255,.95)':'rgba(255,255,255,.82)';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=2;
-      ctx.fillText(pct+'%',x,y);
-      ctx.restore();
-    }
   }
 
   for (let r=0;r<N;r++) for (let c=0;c<N;c++) if (board[r][c]!==EMPTY) drawStone(r,c,board[r][c]);

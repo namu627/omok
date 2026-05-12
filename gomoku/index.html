@@ -23,7 +23,15 @@
     <button class="diff-btn expert"   id="btn-expert">전문가</button>
     <button class="diff-btn god"      id="btn-god">신 ✦</button>
     <button class="diff-btn superGod" id="btn-superGod">절대신 ✦✦</button>
-    <button class="diff-btn practice" id="btn-practice">연습하기</button>
+    <button class="diff-btn learn"    id="btn-learn">학습하기 ▼</button>
+  </div>
+  <div class="learn-submenu" id="learnSubmenu" style="display:none">
+    <button class="diff-btn learn-sub easy"     data-diff="easy">쉬움</button>
+    <button class="diff-btn learn-sub medium"   data-diff="medium">보통</button>
+    <button class="diff-btn learn-sub hard"     data-diff="hard">어려움</button>
+    <button class="diff-btn learn-sub expert"   data-diff="expert">전문가</button>
+    <button class="diff-btn learn-sub god"      data-diff="god">신 ✦</button>
+    <button class="diff-btn learn-sub superGod" data-diff="superGod">절대신 ✦✦</button>
   </div>
   <div class="renju-note">
     <strong>렌주룰 (흑 금수)</strong><br>
@@ -34,6 +42,11 @@
 </div>
 
 <div id="gameScreen">
+  <div class="game-topbar">
+    <button class="ctrl-btn" id="menuBtn">← 메뉴</button>
+    <button class="ctrl-btn" id="restartBtn">↺ 다시 시작</button>
+  </div>
+
   <div class="game-header">
     <div class="player-info">
       <div class="stone-dot" id="turnDot"></div>
@@ -51,10 +64,8 @@
   <canvas id="board"></canvas>
 
   <div class="game-footer">
-    <button class="btn" id="menuBtn">← 메뉴</button>
-    <button class="btn" id="restartBtn">다시 시작</button>
-    <button class="btn confirm-btn" id="confirmBtn" style="display:none">착수 ✓</button>
-    <button class="btn cancel-btn"  id="cancelBtn"  style="display:none">취소</button>
+    <button class="btn confirm-btn" id="confirmBtn" disabled>착수 ✓</button>
+    <button class="btn undo-btn" id="undoBtn" style="display:none">↩ 되돌리기</button>
   </div>
 </div>
 
@@ -64,6 +75,7 @@
     <div class="result-title"  id="resTitle">승리!</div>
     <div class="result-sub"    id="resSub">5목을 완성했습니다!</div>
     <button class="play-again-btn" id="playAgainBtn">다시 하기</button>
+    <button class="btn undo-btn" id="undoOverlayBtn" style="display:none">↩ 되돌리기</button>
     <button class="btn" id="changeDiffBtn" style="border-color:#3a2010;font-size:.82rem;">난이도 변경</button>
   </div>
 </div>
