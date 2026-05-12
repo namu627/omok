@@ -55,8 +55,10 @@ function startGame(d) {
   document.getElementById('thinkLabel').textContent =
     diff === 'superGod' ? '절대신 계산 중' : diff === 'god' ? '신 계산 중' : 'AI 생각 중';
 
-  resize();
-  newGame();
+  requestAnimationFrame(() => {
+    resize();
+    newGame();
+  });
 }
 
 function newGame() {
@@ -233,7 +235,24 @@ function clearFlash()   { flashMsg=''; render(getState()); }
 // ── Init ──────────────────────────────────────────────────────────────────────
 window.addEventListener('resize', () => { resize(); if (board) render(getState()); });
 
-initCanvas(onTap);
+function _init() {
+  initCanvas(onTap);
+  resize();
 
-// Expose functions needed by HTML onclick attributes
-Object.assign(window, { startGame, newGame, showStart, confirmMove, cancelMove });
+  const diffs = ['easy', 'medium', 'hard', 'expert', 'god', 'superGod', 'practice'];
+  for (const d of diffs) {
+    document.getElementById('btn-' + d)?.addEventListener('click', () => startGame(d));
+  }
+  document.getElementById('menuBtn').addEventListener('click', showStart);
+  document.getElementById('restartBtn').addEventListener('click', newGame);
+  document.getElementById('confirmBtn').addEventListener('click', confirmMove);
+  document.getElementById('cancelBtn').addEventListener('click', cancelMove);
+  document.getElementById('playAgainBtn').addEventListener('click', newGame);
+  document.getElementById('changeDiffBtn').addEventListener('click', showStart);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _init);
+} else {
+  _init();
+}

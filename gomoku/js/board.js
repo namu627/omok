@@ -133,10 +133,10 @@ export function drawStone(r, c, col) {
   ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2);
   if (col===BLACK) {
     const g=ctx.createRadialGradient(x-rad*.3,y-rad*.3,0,x,y,rad);
-    g.addColorStop(0,'#505050');g.addColorStop(.5,'#181818');g.addColorStop(1,'#000');ctx.fillStyle=g;
+    g.addColorStop(0,'#3a2a1c');g.addColorStop(.5,'#1a1008');g.addColorStop(1,'#0a0604');ctx.fillStyle=g;
   } else {
     const g=ctx.createRadialGradient(x-rad*.3,y-rad*.3,0,x,y,rad);
-    g.addColorStop(0,'#ffffff');g.addColorStop(.6,'#e8e8e8');g.addColorStop(1,'#aaaaaa');ctx.fillStyle=g;
+    g.addColorStop(0,'#ffffff');g.addColorStop(.6,'#f5f0e8');g.addColorStop(1,'#c8bfb0');ctx.fillStyle=g;
   }
   ctx.fill(); ctx.restore();
   const sg=ctx.createRadialGradient(x-rad*.42,y-rad*.46,0,x-rad*.1,y-rad*.1,rad*.78);
