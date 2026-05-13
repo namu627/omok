@@ -12,6 +12,9 @@ export const S = {
   CLOSE2:       100,
 };
 
+// 30% of OPEN2 — 날일진 보너스 (superGod 전용)
+export const NILIJIN_BONUS = 300;
+
 export const CFG = {
   easy:     { depth:1, cands:10, noise:.30 },
   medium:   { depth:2, cands:15, noise:0 },

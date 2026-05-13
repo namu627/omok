@@ -18,6 +18,7 @@ function getState() {
 // ── Worker message handler ───────────────────────────────────────────────────
 function workerMsg(e) {
   if (!aiBusy || over) return;
+  if (e.data.elapsed != null) console.log(`[AI] 계산 시간: ${e.data.elapsed}ms (${diff})`);
   finishAITurn(e.data.move[0], e.data.move[1]);
 }
 function workerErr() {

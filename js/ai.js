@@ -148,6 +148,7 @@ const N=19, CENTER=9, EMPTY=0, BLACK=1, WHITE=2;
 const S={WIN:100000000,OPEN4:2000000,CLOSE4:1000000,OPEN3:100000,CLOSE3:10000,OPEN2:1000,CLOSE2:100};
 // SuperGod enhanced scoring
 const S_SG={WIN:100000000,OPEN4:6000000,CLOSE4:1200000,OPEN3:150000,CLOSE3:12000,OPEN2:1000,CLOSE2:100};
+const NILIJIN_BONUS=300;
 
 let AI_COL, HU_COL, SUPER_GOD=false;
 function gs(){return SUPER_GOD?S_SG:S;}
@@ -158,6 +159,28 @@ function centerBonus(r,c){
   if(!SUPER_GOD)return 0;
   const d=Math.max(Math.abs(r-CENTER),Math.abs(c-CENTER));
   return Math.max(0,(8-d)*8);
+}
+
+// 날일진 패턴 보너스 — SUPER_GOD 전용
+// 호출 전 b[r][c]===WHITE 상태여야 함
+function nilijinBonusSG(b,r,c){
+  if(!SUPER_GOD)return 0;
+  let bonus=0;
+  const nDirs=[[0,2],[2,0],[2,2],[2,-2]];
+  for(const[dr,dc]of nDirs){
+    const r1=r+dr,c1=c+dc,r2=r-dr,c2=c-dc;
+    const hp=r1>=0&&r1<N&&c1>=0&&c1<N&&b[r1][c1]===WHITE;
+    const hm=r2>=0&&r2<N&&c2>=0&&c2<N&&b[r2][c2]===WHITE;
+    if(hp&&hm){
+      bonus+=NILIJIN_BONUS;
+      // 봉쇄 효과: 단위 방향 ±4칸 내 백돌 아닌 칸 수 계산
+      const udr=dr/2,udc=dc/2;
+      let avail=0;
+      for(let d=-4;d<=4;d++){const nr=r+udr*d,nc=c+udc*d;if(nr>=0&&nr<N&&nc>=0&&nc<N&&b[nr][nc]!==WHITE)avail++;}
+      if(avail<4)bonus+=NILIJIN_BONUS*0.5;
+    }
+  }
+  return bonus;
 }
 
 // Zobrist hash
@@ -269,6 +292,23 @@ function evalBoard(b,ai,hu){
       sc+=col===ai?ps:-ps*defWeight();
     }
   }
+  // 날일진 패턴 보너스 (SUPER_GOD 전용 — 백돌 쌍 스캔)
+  if(SUPER_GOD){
+    const nDirs=[[0,2],[2,0],[2,2],[2,-2]];
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+      if(b[r][c]!==WHITE)continue;
+      for(const[dr,dc]of nDirs){
+        const nr=r+dr,nc=c+dc;
+        if(nr<0||nr>=N||nc<0||nc>=N||b[nr][nc]!==WHITE)continue;
+        let nb=NILIJIN_BONUS;
+        const udr=dr/2,udc=dc/2;
+        let avail=0;
+        for(let d=-4;d<=4;d++){const mr=r+udr*d,mc=c+udc*d;if(mr>=0&&mr<N&&mc>=0&&mc<N&&b[mr][mc]!==WHITE)avail++;}
+        if(avail<4)nb+=NILIJIN_BONUS*0.5;
+        sc+=ai===WHITE?nb:-nb*defWeight();
+      }
+    }
+  }
   return sc;
 }
 
@@ -284,6 +324,7 @@ function cellThreat(b,r,c,col){
     else if(len===3)sc+=oe>=2?sc_t.OPEN3:oe===1?sc_t.CLOSE3:0;
     else if(len===2)sc+=oe>=2?sc_t.OPEN2:oe===1?sc_t.CLOSE2:0;
   }
+  if(SUPER_GOD&&col===WHITE)sc+=nilijinBonusSG(b,r,c);
   b[r][c]=EMPTY;
   sc+=centerBonus(r,c);
   return sc;
@@ -415,8 +456,9 @@ self.onmessage=function(e){
     const hints=searchGodTop3(e.data.board,AI_COL,HU_COL);
     self.postMessage({hints});
   }else{
+    const t0=Date.now();
     const move=searchGod(e.data.board,AI_COL,HU_COL);
-    self.postMessage({move});
+    self.postMessage({move,elapsed:Date.now()-t0});
   }
 };
 `;
